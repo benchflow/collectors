@@ -1,8 +1,0 @@
-//External dependencies
-.godeps
-
-//Package folder
-pkg/
-
-//Binary files
-bin/
