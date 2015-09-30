@@ -7,27 +7,36 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
+	"io"
+	"bufio"
 )
 import "github.com/fsouza/go-dockerclient"
 
 type Container struct {
 	ID           string
-	statsChannel chan *docker.Stats
-	flagsChannel chan bool
+	out io.Writer
+	err io.Writer
 }
 
 var containers [10]Container
 var collecting bool
 
 func collectStats(client docker.Client, container Container) {
+	fo, _ := os.Create(container.ID+"_tmp")
+	fo.Close()
+	writer := bufio.NewWriter(fo)
+	writer.Flush()
 	go func() {
-		err := client.Stats(docker.StatsOptions{
-			ID:      container.ID,
-			Stats:   container.statsChannel,
-			Stream:  true,
-			Done:    container.flagsChannel,
-			Timeout: time.Duration(10),
+		err := client.Logs(docker.LogsOptions{
+			Container: container.ID,
+			OutputStream: writer,
+    		ErrorStream:  writer,
+		    Follow: true,
+		    Stdout: true,
+		    Stderr: true,
+		    Since: 0,
+		    Timestamps: true,
+		    Tail: "10",
 		})
 		if err != nil {
 			log.Fatal(err)
@@ -37,15 +46,9 @@ func collectStats(client docker.Client, container Container) {
 
 func monitorStats(container *Container) {
 	go func() {
-		var e docker.Env
-		fo, _ := os.Create(container.ID+"_tmp")
 		for true {
-			dat := (<-container.statsChannel)
-			e.SetJSON("dat", dat)
-			fo.Write([]byte(e.Get("dat")))
-			fo.Write([]byte("\n \n"))
 			if !collecting {
-				fo.Close()
+				container.out = nil
 				cmd := exec.Command("./mc", "cp", container.ID+"_tmp", os.Getenv("MINIO_HOST"))
     			err := cmd.Start()
     			cmd.Wait()
@@ -95,9 +98,7 @@ func main() {
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ":")
 	for i, each := range conts {
-		statsChannel := make(chan *docker.Stats)
-		flagsChannel := make(chan bool)
-		c := Container{ID: each, statsChannel: statsChannel, flagsChannel: flagsChannel}
+		c := Container{ID: each, out: nil, err: nil}
 		containers[i] = c
 		collectStats(*client, containers[i])
 	}

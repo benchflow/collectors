@@ -8,10 +8,6 @@ import (
     "strings"
 )
  
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "Greetings!")
-}
-
 func backupHandler(w http.ResponseWriter, r *http.Request) {
     ev := os.Getenv("TO_ZIP")
     paths := strings.Split(ev, ":")
@@ -27,13 +23,19 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(w, "ERROR:  %s", err)
         panic(err)
     }
+    cmd = exec.Command("./mc", "cp", "folders.7z", os.Getenv("MINIO_HOST"))
+    err = cmd.Start()
+    cmd.Wait()
+    if err != nil {
+        fmt.Fprintf(w, "ERROR:  %s", err)
+        panic(err)
+    }
     if err == nil {
-        fmt.Fprintf(w, "Compressed")
+        fmt.Fprintf(w, "SUCCESS")
     }
 }
  
 func main() {
-    http.HandleFunc("/", helloHandler)
     http.HandleFunc("/data", backupHandler)
     http.ListenAndServe(":8080", nil)
 }
