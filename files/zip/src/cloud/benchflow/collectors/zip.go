@@ -6,6 +6,8 @@ import (
     "os"
     "os/exec"
     "strings"
+    "github.com/minio/minio-go"
+    "log"
 )
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -23,16 +25,38 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(w, "ERROR:  %s", err)
         panic(err)
     }
-    cmd = exec.Command("./mc", "cp", "folders.7z", os.Getenv("MINIO_HOST"))
-    err = cmd.Start()
-    cmd.Wait()
+    
+    config := minio.Config{
+        AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
+        SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
+        Endpoint:        os.Getenv("MINIO_HOST"),
+    }
+    s3Client, err := minio.New(config)
     if err != nil {
-        fmt.Fprintf(w, "ERROR:  %s", err)
-        panic(err)
+        log.Fatalln(err)
     }
-    if err == nil {
-        fmt.Fprintf(w, "SUCCESS")
-    }
+    object, err := os.Open("/folders.7z")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer object.Close()
+	objectInfo, err := object.Stat()
+	if err != nil {
+		object.Close()
+		log.Fatalln(err)
+	}
+	err = s3Client.PutObject("folders", "folders.7z", "application/octet-stream", objectInfo.Size(), object)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	for object := range s3Client.ListObjects("folders", "", true) {
+		if object.Err != nil {
+			log.Fatalln(object.Err)
+		}
+		log.Println(object.Stat)
+	}
+	
+	fmt.Fprintf(w, "SUCCESS")
 }
  
 func main() {
