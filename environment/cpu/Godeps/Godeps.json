@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
-			"Rev": "af9789bbd78acf3e279274caa54682185eb7ed33"
+			"Rev": "412c004d923b7b89701e7a1632de83f843657a03"
 		},
 		{
 			"ImportPath": "github.com/minio/minio-go",
