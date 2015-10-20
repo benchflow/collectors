@@ -9,6 +9,7 @@ ADD src/cloud/benchflow/collectors /go/src/cloud/benchflow/collectors
 RUN go get github.com/minio/minio-go
 RUN go install cloud/benchflow/collectors
 
+ENV CONTAINER_NAME wfms-zip
 ENV TO_ZIP /media
 ENV MINIO_HOST http://192.168.99.100:9000
 ENV MINIO_ACCESS_KEY_ID dummy

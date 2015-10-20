@@ -5,6 +5,7 @@ RUN apt-get update \
     && apt-get -y install p7zip \
     && apt-get clean
 
+ENV CONTAINER_NAME wfms-dbms
 ENV MYSQL_HOST db
 ENV MYSQL_USER root
 ENV MYSQL_USER_PASSWORD PASSWORD

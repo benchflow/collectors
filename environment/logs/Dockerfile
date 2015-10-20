@@ -10,6 +10,7 @@ RUN go get github.com/fsouza/go-dockerclient
 RUN go get github.com/minio/minio-go
 RUN go install cloud/benchflow/collectors
 
+ENV CONTAINER_NAME wfms-logs
 ENV CONTAINERS db
 ENV MINIO_HOST http://192.168.99.100:9000
 ENV MINIO_ACCESS_KEY_ID dummy
