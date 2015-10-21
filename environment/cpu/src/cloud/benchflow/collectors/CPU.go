@@ -74,7 +74,7 @@ func monitorStats(container *Container) {
 					object.Close()
 					log.Fatalln(err)
 				}
-				err = s3Client.PutObject("data", container.ID+"_tmp.7z", "application/octet-stream", objectInfo.Size(), object)
+				err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_CPU.7z", "application/octet-stream", objectInfo.Size(), object)
 				if err != nil {
 					log.Fatalln(err)
 				}
