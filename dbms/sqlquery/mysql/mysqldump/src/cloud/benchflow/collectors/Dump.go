@@ -9,6 +9,8 @@ import (
     "log"
 )
 
+var runCounter int
+
 func backupHandler(w http.ResponseWriter, r *http.Request) {
     cmd := exec.Command("mysqldump", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("DB_PORT_3306_TCP_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "--databases", os.Getenv("MYSQL_DB_NAME"))
     outfile, err := os.Create("./backup.sql")
@@ -24,7 +26,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(w, "ERROR:  %s", err)
         panic(err)
     }
-    cmd = exec.Command("7zr", "a", "backup.7z", "backup.sql")
+    
+    cmd = exec.Command("gzip", "backup.sql")
     err = cmd.Start()
     cmd.Wait()
     if err != nil {
@@ -41,7 +44,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     if err != nil {
         log.Fatalln(err)
     }
-    object, err := os.Open("backup.7z")
+	
+	object, err := os.Open("backup.sql.gz")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -51,21 +55,17 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		object.Close()
 		log.Fatalln(err)
 	}
-	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_mysqldump.7z", "application/octet-stream", objectInfo.Size(), object)
+	err = s3Client.PutObject("benchmarks/a/runs/"+string(runCounter), os.Getenv("CONTAINER_NAME")+"_mysqldump.sql.gz", "application/octet-stream", objectInfo.Size(), object)
+	runCounter += 1
 	if err != nil {
 		log.Fatalln(err)
-	}
-	for object := range s3Client.ListObjects("backup", "", true) {
-		if object.Err != nil {
-			log.Fatalln(object.Err)
-		}
-		log.Println(object.Stat)
 	}
 	
 	fmt.Fprintf(w, "SUCCESS")
 }
  
 func main() {
+	runCounter = 1
     http.HandleFunc("/data", backupHandler)
     http.ListenAndServe(":8080", nil)
 }

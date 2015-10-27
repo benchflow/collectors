@@ -38,7 +38,7 @@ func collectStats(container Container) {
 		log.Fatal(err)
 	}
 
-	cmd := exec.Command("7zr", "a", container.ID+"_tmp.7z", container.ID+"_tmp", container.ID+"_tmp_err")
+	cmd := exec.Command("gzip", container.ID+"_tmp", container.ID+"_tmp_err")
 	err = cmd.Start()
 	cmd.Wait()
 	if err != nil {
@@ -54,7 +54,8 @@ func collectStats(container Container) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	object, err := os.Open(container.ID + "_tmp.7z")
+	
+	object, err := os.Open(container.ID + "_tmp.gz")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -64,15 +65,24 @@ func collectStats(container Container) {
 		object.Close()
 		log.Fatalln(err)
 	}
-	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_Logs.7z", "application/octet-stream", objectInfo.Size(), object)
+	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_Logs.gz", "application/octet-stream", objectInfo.Size(), object)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	for object := range s3Client.ListObjects("data", "", true) {
-		if object.Err != nil {
-			log.Fatalln(object.Err)
-		}
-		log.Println(object.Stat)
+	
+	object, err = os.Open(container.ID + "_tmp_err.gz")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer object.Close()
+	objectInfo, err = object.Stat()
+	if err != nil {
+		object.Close()
+		log.Fatalln(err)
+	}
+	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_Logs_err.gz", "application/octet-stream", objectInfo.Size(), object)
+	if err != nil {
+		log.Fatalln(err)
 	}
 }
 

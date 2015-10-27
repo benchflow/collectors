@@ -48,7 +48,7 @@ func monitorStats(container *Container) {
 			if !collecting {
 				fo.Close()
 				
-				cmd := exec.Command("7zr", "a", container.ID+"_tmp.7z", container.ID+"_tmp")
+				cmd := exec.Command("gzip", container.ID+"_tmp")
 			    err := cmd.Start()
 			    cmd.Wait()
 			    if err != nil {
@@ -64,7 +64,8 @@ func monitorStats(container *Container) {
 			    if err != nil {
 			        log.Fatalln(err)
 			    }
-			    object, err := os.Open(container.ID+"_tmp.7z")
+			    
+			    object, err := os.Open(container.ID+"_tmp.gz")
 				if err != nil {
 					log.Fatalln(err)
 				}
@@ -74,15 +75,9 @@ func monitorStats(container *Container) {
 					object.Close()
 					log.Fatalln(err)
 				}
-				err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_CPU.7z", "application/octet-stream", objectInfo.Size(), object)
+				err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_stats.gz", "application/octet-stream", objectInfo.Size(), object)
 				if err != nil {
 					log.Fatalln(err)
-				}
-				for object := range s3Client.ListObjects("data", "", true) {
-					if object.Err != nil {
-						log.Fatalln(object.Err)
-					}
-					log.Println(object.Stat)
 				}
 				
 				return

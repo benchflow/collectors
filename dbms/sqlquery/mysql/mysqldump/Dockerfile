@@ -2,7 +2,7 @@ FROM golang
  
 RUN apt-get update \
 	&& apt-get -y install mysql-client-5.5 \
-    && apt-get -y install p7zip \
+    && apt-get -y install gzip \
     && apt-get clean
 
 ENV CONTAINER_NAME wfms-dbms

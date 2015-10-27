@@ -1,7 +1,7 @@
 FROM golang
  
 RUN apt-get update \
-    && apt-get -y install p7zip \
+    && apt-get -y install gzip \
     && apt-get clean
 
 ADD src/cloud/benchflow/collectors /go/src/cloud/benchflow/collectors
