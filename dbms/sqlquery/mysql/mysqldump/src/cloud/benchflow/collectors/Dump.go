@@ -12,6 +12,7 @@ import (
 var runCounter int
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
+	/*
     cmd := exec.Command("mysqldump", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("DB_PORT_3306_TCP_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "--databases", os.Getenv("MYSQL_DB_NAME"))
     outfile, err := os.Create("./backup.sql")
     if err != nil {
@@ -26,8 +27,27 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(w, "ERROR:  %s", err)
         panic(err)
     }
+    */
     
-    cmd = exec.Command("gzip", "backup.sql")
+    cmd := exec.Command("mysql", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("DB_PORT_3306_TCP_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "-e", "USE "+os.Getenv("MYSQL_DB_NAME")+"; SELECT * FROM "+os.Getenv("TABLE_NAME")+";")
+    cmd2 := exec.Command("sed", "s/\\t/\",\"/g;s/^/\"/;s/$/\"/;s/\\n//g")
+    outfile, err := os.Create("./backup.csv")
+    if err != nil {
+        fmt.Fprintf(w, "ERROR:  %s", err)
+        panic(err)
+    }
+    defer outfile.Close()
+    cmd2.Stdin, _ = cmd.StdoutPipe()
+    cmd2.Stdout = outfile
+    err = cmd2.Start()
+    cmd.Run()
+    cmd2.Wait()
+    if err != nil {
+        fmt.Fprintf(w, "ERROR:  %s", err)
+        panic(err)
+    }
+    
+    cmd = exec.Command("gzip", "backup.csv")
     err = cmd.Start()
     cmd.Wait()
     if err != nil {
@@ -55,7 +75,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		object.Close()
 		log.Fatalln(err)
 	}
-	err = s3Client.PutObject("benchmarks/a/runs/"+string(runCounter), os.Getenv("CONTAINER_NAME")+"_mysqldump.sql.gz", "application/octet-stream", objectInfo.Size(), object)
+	err = s3Client.PutObject("benchmarks", os.Getenv("CONTAINER_NAME")+"_mysqldump.sql.gz", "application/octet-stream", objectInfo.Size(), object)
 	runCounter += 1
 	if err != nil {
 		log.Fatalln(err)
