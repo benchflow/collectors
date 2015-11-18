@@ -44,7 +44,7 @@ func monitorStats(container *Container) {
 			dat := (<-container.statsChannel)
 			e.SetJSON("dat", dat)
 			fo.Write([]byte(e.Get("dat")))
-			fo.Write([]byte("\n \n"))
+			fo.Write([]byte("\n"))
 			if !collecting {
 				fo.Close()
 				
@@ -111,16 +111,16 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	collecting = false
-	/*
 	path := os.Getenv("DOCKER_CERT_PATH")
 	endpoint := os.Getenv("DOCKER_HOST")
+	endpoint = "tcp://192.168.99.100:2376"
     ca := fmt.Sprintf("%s/ca.pem", path)
     cert := fmt.Sprintf("%s/cert.pem", path)
     key := fmt.Sprintf("%s/key.pem", path)
     client, err := docker.NewTLSClient(endpoint, cert, key, ca)
-    */
-	endpoint := "unix:///var/run/docker.sock"
-    client, err := docker.NewClient(endpoint)
+    
+	//endpoint := "unix:///var/run/docker.sock"
+    //client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatal(err)
 	}

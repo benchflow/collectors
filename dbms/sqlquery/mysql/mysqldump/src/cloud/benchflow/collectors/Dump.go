@@ -10,8 +10,6 @@ import (
     "strings"
 )
 
-var runCounter int
-
 func backupHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Minio client setup
@@ -60,7 +58,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		object.Close()
 		log.Fatalln(err)
 		}
-	err = s3Client.PutObject("benchmarks", "runs/a/"+string(runCounter)+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_sql.gz", "application/octet-stream", objectInfo.Size(), object)
+	err = s3Client.PutObject("benchmarks", "runs/a/"+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_sql.gz", "application/octet-stream", objectInfo.Size(), object)
 	if err != nil {
 		log.Fatalln(err)
 		}	
@@ -107,8 +105,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", "runs/a/"+string(runCounter)+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_"+each+".csv.gz", "application/octet-stream", objectInfo.Size(), object)
-		runCounter += 1
+		err = s3Client.PutObject("benchmarks", "runs/a/"+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_"+each+".csv.gz", "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -152,8 +149,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", "runs/a/"+string(runCounter)+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_"+each+"_schema.csv.gz", "application/octet-stream", objectInfo.Size(), object)
-		runCounter += 1
+		err = s3Client.PutObject("benchmarks", "runs/a/"+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_"+each+"_schema.csv.gz", "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}	
@@ -163,7 +159,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 }
  
 func main() {
-	runCounter = 1
     http.HandleFunc("/data", backupHandler)
     http.ListenAndServe(":8080", nil)
 }
