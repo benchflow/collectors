@@ -37,53 +37,12 @@ func collectStats(container Container) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	cmd := exec.Command("gzip", container.ID+"_tmp", container.ID+"_tmp_err")
-	err = cmd.Start()
-	cmd.Wait()
-	if err != nil {
-		panic(err)
-	}
-
-	config := minio.Config{
-		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
-		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
-		Endpoint:        os.Getenv("MINIO_HOST"),
-	}
-	s3Client, err := minio.New(config)
-	if err != nil {
-		log.Fatalln(err)
-	}
 	
-	object, err := os.Open(container.ID + "_tmp.gz")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer object.Close()
-	objectInfo, err := object.Stat()
-	if err != nil {
-		object.Close()
-		log.Fatalln(err)
-	}
-	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_Logs.gz", "application/octet-stream", objectInfo.Size(), object)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	
-	object, err = os.Open(container.ID + "_tmp_err.gz")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer object.Close()
-	objectInfo, err = object.Stat()
-	if err != nil {
-		object.Close()
-		log.Fatalln(err)
-	}
-	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_Logs_err.gz", "application/octet-stream", objectInfo.Size(), object)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	gzipFile(container.ID+"_tmp")
+	gzipFile(container.ID+"_tmp_err")
+
+	storeOnMinio(container.ID+"_tmp")
+	storeOnMinio(container.ID+"_tmp_err")
 }
 
 func storeData(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +52,41 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		collectStats(containers[i])
 	}
 }
+
+func gzipFile(fileName string) {
+	cmd := exec.Command("gzip", fileName)
+	err := cmd.Start()
+	cmd.Wait()
+	if err != nil {
+		panic(err)
+		}
+	}
+
+func storeOnMinio(fileName string) {
+	config := minio.Config{
+		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
+		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
+		Endpoint:        os.Getenv("MINIO_HOST"),
+		}
+		s3Client, err := minio.New(config)
+	    if err != nil {
+	        log.Fatalln(err)
+	    }  
+	    object, err := os.Open(fileName)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		defer object.Close()
+		objectInfo, err := object.Stat()
+		if err != nil {
+			object.Close()
+			log.Fatalln(err)
+		}
+		err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_stats.gz", "application/octet-stream", objectInfo.Size(), object)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
 
 func main() {
 	path := os.Getenv("DOCKER_CERT_PATH")

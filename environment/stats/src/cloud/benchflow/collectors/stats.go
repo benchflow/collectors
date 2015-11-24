@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"sync"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/minio/minio-go"
 )
@@ -15,20 +16,21 @@ import (
 type Container struct {
 	ID           string
 	statsChannel chan *docker.Stats
-	flagsChannel chan bool
+	doneChannel chan bool
 	stopChannel chan bool
 }
 
-var containers [10]Container
+var containers []Container
+var waitGroup sync.WaitGroup
 var collecting bool
 
-func collectStats(client docker.Client, container Container) {
+func attachToContainer(client docker.Client, container Container) {
 	go func() {
 		err := client.Stats(docker.StatsOptions{
 			ID:      container.ID,
 			Stats:   container.statsChannel,
 			Stream:  true,
-			Done:    container.flagsChannel,
+			Done:    container.doneChannel,
 			Timeout: time.Duration(10),
 		})
 		if err != nil {
@@ -37,17 +39,20 @@ func collectStats(client docker.Client, container Container) {
 	}()
 }
 
-func monitorStats(container *Container) {
+func collectStats(container Container) {
 	go func() {
 		var e docker.Env
 		fo, _ := os.Create(container.ID+"_tmp")
 		for true {
 			select {
-			case _ = <- container.stopChannel:
-				//container.flagsChannel <- true
+			case <- container.stopChannel:
+				fmt.Println("Stopping")	
+				container.doneChannel <- true
+				fmt.Println("Stopping Done")
 				fo.Close()
 				gzipFile(container.ID+"_tmp")
-				storeOnMinio(container.ID+"_tmp")
+				//storeOnMinio(container.ID+"_tmp")
+				waitGroup.Done()
 				return
 			default:
 				dat := (<-container.statsChannel)
@@ -94,11 +99,7 @@ func storeOnMinio(fileName string) {
 		}
 	}
 
-func startCollecting(w http.ResponseWriter, r *http.Request) {
-	if collecting {
-		fmt.Fprintf(w, "Already collecting")
-		return
-	}
+func createDockerClient() docker.Client {
 	path := os.Getenv("DOCKER_CERT_PATH")
 	endpoint := os.Getenv("DOCKER_HOST")
 	endpoint = "tcp://192.168.99.100:2376"
@@ -110,17 +111,27 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
     //client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatal(err)
+		}
+	return *client
 	}
+
+func startCollecting(w http.ResponseWriter, r *http.Request) {
+	if collecting {
+		fmt.Fprintf(w, "Already collecting")
+		return
+	}
+	client := createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ":")
-	for i, each := range conts {
+	for _, each := range conts {
 		statsChannel := make(chan *docker.Stats)
-		flagsChannel := make(chan bool)
+		doneChannel := make(chan bool)
 		stopChannel := make(chan bool)
-		c := Container{ID: each, statsChannel: statsChannel, flagsChannel: flagsChannel, stopChannel : stopChannel}
-		containers[i] = c
-		collectStats(*client, containers[i])
-		monitorStats(&containers[i])
+		c := Container{ID: each, statsChannel: statsChannel, doneChannel: doneChannel, stopChannel : stopChannel}
+		containers = append(containers, c)
+		attachToContainer(client, c)
+		collectStats(c)
+		waitGroup.Add(1)
 	}
 	collecting = true
 	fmt.Fprintf(w, "Started collecting")
@@ -134,6 +145,7 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		c.stopChannel <- true
 		}
+	waitGroup.Wait()
 	collecting = false
 	fmt.Fprintf(w, "Stopped collecting")
 }
