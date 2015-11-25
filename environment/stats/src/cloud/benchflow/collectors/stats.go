@@ -17,10 +17,10 @@ type Container struct {
 	ID           string
 	statsChannel chan *docker.Stats
 	doneChannel chan bool
-	stopChannel chan bool
 }
 
 var containers []Container
+var stopChannel chan bool
 var waitGroup sync.WaitGroup
 var collecting bool
 
@@ -45,10 +45,8 @@ func collectStats(container Container) {
 		fo, _ := os.Create(container.ID+"_tmp")
 		for true {
 			select {
-			case <- container.stopChannel:
-				fmt.Println("Stopping")	
-				container.doneChannel <- true
-				fmt.Println("Stopping Done")
+			case <- stopChannel:
+				//container.doneChannel <- true
 				fo.Close()
 				gzipFile(container.ID+"_tmp")
 				//storeOnMinio(container.ID+"_tmp")
@@ -123,11 +121,11 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	client := createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ":")
+	containers = []Container{}
 	for _, each := range conts {
 		statsChannel := make(chan *docker.Stats)
 		doneChannel := make(chan bool)
-		stopChannel := make(chan bool)
-		c := Container{ID: each, statsChannel: statsChannel, doneChannel: doneChannel, stopChannel : stopChannel}
+		c := Container{ID: each, statsChannel: statsChannel, doneChannel: doneChannel}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
@@ -142,8 +140,8 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Currently not collecting")
 		return
 	}
-	for _, c := range containers {
-		c.stopChannel <- true
+	for _, _ = range containers {
+		stopChannel <- true
 		}
 	waitGroup.Wait()
 	collecting = false
@@ -152,6 +150,7 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	collecting = false
+	stopChannel = make(chan bool)
 	
 	http.HandleFunc("/start", startCollecting)
 	http.HandleFunc("/stop", stopCollecting)
