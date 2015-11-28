@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"strconv"
 )
 
 type Container struct {
@@ -19,7 +20,7 @@ type Container struct {
 var containers [10]Container
 var client docker.Client
 
-func collectStats(container Container) {
+func collectStats(container Container, since int64) {
 	fo, _ := os.Create(container.ID + "_tmp")
 	writerOut := bufio.NewWriter(fo)
 	fe, _ := os.Create(container.ID + "_tmp_err")
@@ -31,7 +32,7 @@ func collectStats(container Container) {
 		Follow:       false,
 		Stdout:       true,
 		Stderr:       true,
-		Since:        0,
+		Since:        since,
 		Timestamps:   true,
 	})
 	if err != nil {
@@ -48,8 +49,13 @@ func collectStats(container Container) {
 func storeData(w http.ResponseWriter, r *http.Request) {
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ":")
+	since := r.FormValue("since")
+	sinceInt, err := strconv.ParseInt(since, 10, 64)
+	if err != nil {
+		panic(err)
+		}
 	for i, _ := range conts {
-		collectStats(containers[i])
+		collectStats(containers[i], sinceInt)
 	}
 }
 
