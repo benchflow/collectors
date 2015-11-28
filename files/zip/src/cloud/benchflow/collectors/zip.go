@@ -14,11 +14,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     ev := os.Getenv("TO_ZIP")
     paths := strings.Split(ev, ":")
     for _, each := range paths {
-        fmt.Fprintf(w, "Trying to zip %s\n", each)
+        fmt.Fprintf(w, "Trying to zip %s\n", each)   
     }
-    zipCommand := strings.Split("a,/folders.7z", ",")
-    paths = append(zipCommand, paths...)
-    cmd := exec.Command("7zr", paths...)
+    cmd := exec.Command("gzip", paths...)
     err := cmd.Start()
     cmd.Wait()
     if err != nil {
@@ -35,25 +33,22 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     if err != nil {
         log.Fatalln(err)
     }
-    object, err := os.Open("/folders.7z")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer object.Close()
-	objectInfo, err := object.Stat()
-	if err != nil {
-		object.Close()
-		log.Fatalln(err)
-	}
-	err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_zipping.7z", "application/octet-stream", objectInfo.Size(), object)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	for object := range s3Client.ListObjects("folders", "", true) {
-		if object.Err != nil {
-			log.Fatalln(object.Err)
+    
+    for _, each := range paths {
+	    object, err := os.Open(each+".gz")
+		if err != nil {
+			log.Fatalln(err)
 		}
-		log.Println(object.Stat)
+		defer object.Close()
+		objectInfo, err := object.Stat()
+		if err != nil {
+			object.Close()
+			log.Fatalln(err)
+		}
+		err = s3Client.PutObject("benchmarks/a/runs/1", os.Getenv("CONTAINER_NAME")+"_"+each+".gz", "application/octet-stream", objectInfo.Size(), object)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 	
 	fmt.Fprintf(w, "SUCCESS")
