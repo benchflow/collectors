@@ -10,59 +10,46 @@ import (
     "strings"
 )
 
-func backupHandler(w http.ResponseWriter, r *http.Request) {
-	
-	// Minio client setup
-	config := minio.Config{
-	        AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
-	        SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
-	        Endpoint:        os.Getenv("MINIO_HOST"),
-	    }
-	s3Client, err := minio.New(config)
-	if err != nil {
-		log.Fatalln(err)
-	    }
-	
-	// Dumping the database as .sql
-    cmd := exec.Command("mysqldump", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("DB_PORT_3306_TCP_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "--databases", os.Getenv("MYSQL_DB_NAME"))
-    outfile, err := os.Create("./backup.sql")
-    if err != nil {
-        fmt.Fprintf(w, "ERROR:  %s", err)
-        panic(err)
-    }
-    defer outfile.Close()
-    cmd.Stdout = outfile
-    err = cmd.Start()
-    cmd.Wait()
-    if err != nil {
-        fmt.Fprintf(w, "ERROR:  %s", err)
-        panic(err)
-    }
-    
-    cmd = exec.Command("gzip", "backup.sql")
-	err = cmd.Start()
+func generateKey(fileName string) string{
+	return ("hash/BID/1/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
+}
+
+func gzipFile(fileName string) {
+	cmd := exec.Command("gzip", fileName)
+	err := cmd.Start()
 	cmd.Wait()
 	if err != nil {
-	    fmt.Fprintf(w, "ERROR:  %s", err)
-	    panic(err)
-	    }
-	
-	// Save to Minio
-	object, err := os.Open("backup.sql.gz")
-	if err != nil {
-		log.Fatalln(err)
+		panic(err)
 		}
-	defer object.Close()
-	objectInfo, err := object.Stat()
-	if err != nil {
-		object.Close()
-		log.Fatalln(err)
+	}
+
+func storeOnMinio(fileName string, key string) {
+	config := minio.Config{
+		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
+		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
+		Endpoint:        os.Getenv("MINIO_HOST"),
 		}
-	err = s3Client.PutObject("benchmarks", "runs/a/"+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_sql.gz", "application/octet-stream", objectInfo.Size(), object)
-	if err != nil {
-		log.Fatalln(err)
-		}	
-	
+		s3Client, err := minio.New(config)
+	    if err != nil {
+	        log.Fatalln(err)
+	    }  
+	    object, err := os.Open(fileName)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		defer object.Close()
+		objectInfo, err := object.Stat()
+		if err != nil {
+			object.Close()
+			log.Fatalln(err)
+		}
+		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
+func backupHandler(w http.ResponseWriter, r *http.Request) {
 	// Retrieve table names
 	ev := os.Getenv("TABLE_NAMES")
     tables := strings.Split(ev, ":")
@@ -76,7 +63,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
 	    }
-	    defer outfile.Close()
 	    cmd2.Stdin, _ = cmd.StdoutPipe()
 	    cmd2.Stdout = outfile
 	    err = cmd2.Start()
@@ -86,29 +72,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
 	    }
-	    
-	    cmd = exec.Command("gzip", "backup.csv")
-	    err = cmd.Start()
-	    cmd.Wait()
-	    if err != nil {
-	        fmt.Fprintf(w, "ERROR:  %s", err)
-	        panic(err)
-	    }
-		
-		object, err := os.Open("backup.csv.gz")
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer object.Close()
-		objectInfo, err := object.Stat()
-		if err != nil {
-			object.Close()
-			log.Fatalln(err)
-		}
-		err = s3Client.PutObject("benchmarks", "runs/a/"+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_"+each+".csv.gz", "application/octet-stream", objectInfo.Size(), object)
-		if err != nil {
-			log.Fatalln(err)
-		}
+	    outfile.Close()
+	    gzipFile("backup.csv")
+		storeOnMinio("backup.csv.gz", generateKey(each+".csv.gz"))
 	}
     
     // Save the column types of the tables
@@ -120,7 +86,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
 	    }
-	    defer outfile.Close()
 	    cmd2.Stdin, _ = cmd.StdoutPipe()
 	    cmd2.Stdout = outfile
 	    err = cmd2.Start()
@@ -130,29 +95,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
 	    }
-	    
-	    cmd = exec.Command("gzip", "backup.csv")
-	    err = cmd.Start()
-	    cmd.Wait()
-	    if err != nil {
-	        fmt.Fprintf(w, "ERROR:  %s", err)
-	        panic(err)
-	    }
-		
-		object, err := os.Open("backup.csv.gz")
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer object.Close()
-		objectInfo, err := object.Stat()
-		if err != nil {
-			object.Close()
-			log.Fatalln(err)
-		}
-		err = s3Client.PutObject("benchmarks", "runs/a/"+"/"+os.Getenv("CONTAINER_NAME")+"_mysqldump_"+each+"_schema.csv.gz", "application/octet-stream", objectInfo.Size(), object)
-		if err != nil {
-			log.Fatalln(err)
-		}	
+	    outfile.Close()
+	    gzipFile("backup.csv")
+		storeOnMinio("backup.csv.gz", generateKey(each+"_schema.csv.gz"))
 	}
     
 	fmt.Fprintf(w, "SUCCESS")

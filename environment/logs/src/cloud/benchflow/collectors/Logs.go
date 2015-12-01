@@ -39,11 +39,14 @@ func collectStats(container Container, since int64) {
 		log.Fatal(err)
 	}
 	
+	fo.Close()
+	fe.Close()
+	
 	gzipFile(container.ID+"_tmp")
 	gzipFile(container.ID+"_tmp_err")
 
-	storeOnMinio(container.ID+"_tmp.gz")
-	storeOnMinio(container.ID+"_tmp_err.gz")
+	storeOnMinio(container.ID+"_tmp.gz", generateKey("logs.gz"))
+	storeOnMinio(container.ID+"_tmp_err.gz", generateKey("logs_err.gz"))
 }
 
 func storeData(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +62,10 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func generateKey(fileName string) string{
+	return ("hash/BID/1/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
+}
+
 func gzipFile(fileName string) {
 	cmd := exec.Command("gzip", fileName)
 	err := cmd.Start()
@@ -68,7 +75,7 @@ func gzipFile(fileName string) {
 		}
 	}
 
-func storeOnMinio(fileName string) {
+func storeOnMinio(fileName string, key string) {
 	config := minio.Config{
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
@@ -88,7 +95,7 @@ func storeOnMinio(fileName string) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", fileName, "application/octet-stream", objectInfo.Size(), object)
+		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}
