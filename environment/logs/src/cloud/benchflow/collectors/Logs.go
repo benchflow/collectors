@@ -45,8 +45,8 @@ func collectStats(container Container, since int64) {
 	gzipFile(container.ID+"_tmp")
 	gzipFile(container.ID+"_tmp_err")
 
-	storeOnMinio(container.ID+"_tmp.gz", generateKey("logs.gz"))
-	storeOnMinio(container.ID+"_tmp_err.gz", generateKey("logs_err.gz"))
+	storeOnMinio(container.ID+"_tmp.gz", "runs", generateKey("logs.gz"))
+	storeOnMinio(container.ID+"_tmp_err.gz", "runs", generateKey("logs_err.gz"))
 }
 
 func storeData(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +75,7 @@ func gzipFile(fileName string) {
 		}
 	}
 
-func storeOnMinio(fileName string, key string) {
+func storeOnMinio(fileName string, bucket string, key string) {
 	config := minio.Config{
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),

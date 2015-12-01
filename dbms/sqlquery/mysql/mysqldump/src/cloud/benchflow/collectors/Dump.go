@@ -23,7 +23,7 @@ func gzipFile(fileName string) {
 		}
 	}
 
-func storeOnMinio(fileName string, key string) {
+func storeOnMinio(fileName string, bucket string, key string) {
 	config := minio.Config{
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
@@ -43,7 +43,7 @@ func storeOnMinio(fileName string, key string) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
+		err = s3Client.PutObject(bucket, key, "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -74,7 +74,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    }
 	    outfile.Close()
 	    gzipFile("backup.csv")
-		storeOnMinio("backup.csv.gz", generateKey(each+".csv.gz"))
+		storeOnMinio("backup.csv.gz", "runs", generateKey(each+".csv.gz"))
 	}
     
     // Save the column types of the tables
@@ -97,7 +97,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    }
 	    outfile.Close()
 	    gzipFile("backup.csv")
-		storeOnMinio("backup.csv.gz", generateKey(each+"_schema.csv.gz"))
+		storeOnMinio("backup.csv.gz", "runs", generateKey(each+"_schema.csv.gz"))
 	}
     
 	fmt.Fprintf(w, "SUCCESS")

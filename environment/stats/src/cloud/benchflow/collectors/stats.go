@@ -49,7 +49,7 @@ func collectStats(container Container) {
 				//container.doneChannel <- true
 				fo.Close()
 				gzipFile(container.ID+"_tmp")
-				//storeOnMinio(container.ID+"_tmp.gz", generateKey("stats.gz"))
+				//storeOnMinio(container.ID+"_tmp.gz", "runs", generateKey("stats.gz"))
 				waitGroup.Done()
 				return
 			default:
@@ -75,7 +75,7 @@ func gzipFile(fileName string) {
 		}
 	}
 
-func storeOnMinio(fileName string, key string) {
+func storeOnMinio(fileName string, bucket string, key string) {
 	config := minio.Config{
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
@@ -95,7 +95,7 @@ func storeOnMinio(fileName string, key string) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
+		err = s3Client.PutObject(bucket, key, "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}

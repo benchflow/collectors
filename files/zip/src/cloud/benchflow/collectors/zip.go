@@ -23,7 +23,7 @@ func gzipFile(fileName string) {
 		}
 	}
 
-func storeOnMinio(fileName string, key string) {
+func storeOnMinio(fileName string, bucket string, key string) {
 	config := minio.Config{
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
@@ -43,7 +43,7 @@ func storeOnMinio(fileName string, key string) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
+		err = s3Client.PutObject(bucket, key, "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -55,7 +55,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     for _, each := range paths {
         fmt.Fprintf(w, "Trying to zip %s\n", each)   
 	    gzipFile(each)
-	    storeOnMinio(each+".gz", generateKey(each+".gz"))
+	    storeOnMinio(each+".gz", "runs", generateKey(each+".gz"))
 	}
 	
 	fmt.Fprintf(w, "SUCCESS")
