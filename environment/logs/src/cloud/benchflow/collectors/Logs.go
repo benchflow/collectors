@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"strconv"
 )
 
 type Container struct {
@@ -19,7 +20,7 @@ type Container struct {
 var containers [10]Container
 var client docker.Client
 
-func collectStats(container Container) {
+func collectStats(container Container, since int64) {
 	fo, _ := os.Create(container.ID + "_tmp")
 	writerOut := bufio.NewWriter(fo)
 	fe, _ := os.Create(container.ID + "_tmp_err")
@@ -31,26 +32,38 @@ func collectStats(container Container) {
 		Follow:       false,
 		Stdout:       true,
 		Stderr:       true,
-		Since:        0,
+		Since:        since,
 		Timestamps:   true,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	
+	fo.Close()
+	fe.Close()
+	
 	gzipFile(container.ID+"_tmp")
 	gzipFile(container.ID+"_tmp_err")
 
-	storeOnMinio(container.ID+"_tmp.gz")
-	storeOnMinio(container.ID+"_tmp_err.gz")
+	storeOnMinio(container.ID+"_tmp.gz", "runs", generateKey("logs.gz"))
+	storeOnMinio(container.ID+"_tmp_err.gz", "runs", generateKey("logs_err.gz"))
 }
 
 func storeData(w http.ResponseWriter, r *http.Request) {
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ":")
+	since := r.FormValue("since")
+	sinceInt, err := strconv.ParseInt(since, 10, 64)
+	if err != nil {
+		panic(err)
+		}
 	for i, _ := range conts {
-		collectStats(containers[i])
+		collectStats(containers[i], sinceInt)
 	}
+}
+
+func generateKey(fileName string) string{
+	return ("hash/BID/1/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
 }
 
 func gzipFile(fileName string) {
@@ -62,7 +75,7 @@ func gzipFile(fileName string) {
 		}
 	}
 
-func storeOnMinio(fileName string) {
+func storeOnMinio(fileName string, bucket string, key string) {
 	config := minio.Config{
 		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
@@ -82,7 +95,7 @@ func storeOnMinio(fileName string) {
 			object.Close()
 			log.Fatalln(err)
 		}
-		err = s3Client.PutObject("benchmarks", fileName, "application/octet-stream", objectInfo.Size(), object)
+		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
 		if err != nil {
 			log.Fatalln(err)
 		}
