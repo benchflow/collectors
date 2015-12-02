@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 	"sync"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/minio/minio-go"
@@ -31,7 +30,7 @@ func attachToContainer(client docker.Client, container Container) {
 			Stats:   container.statsChannel,
 			Stream:  true,
 			Done:    container.doneChannel,
-			Timeout: time.Duration(10),
+			Timeout: 0,
 		})
 		if err != nil {
 			log.Fatal(err)
@@ -104,7 +103,7 @@ func storeOnMinio(fileName string, bucket string, key string) {
 func createDockerClient() docker.Client {
 	path := os.Getenv("DOCKER_CERT_PATH")
 	endpoint := "tcp://"+os.Getenv("DOCKER_HOST")+":2376"
-	//endpoint = "tcp://192.168.99.100:2376"
+	endpoint = "tcp://192.168.99.100:2376"
     ca := fmt.Sprintf("%s/ca.pem", path)
     cert := fmt.Sprintf("%s/cert.pem", path)
     key := fmt.Sprintf("%s/key.pem", path)
