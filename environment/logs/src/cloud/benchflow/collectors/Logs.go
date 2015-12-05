@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/fsouza/go-dockerclient"
-	"github.com/minio/minio-go"
+	//"github.com/minio/minio-go"
+	"github.com/Cerfoglg/commons/src/minio"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"strconv"
 )
@@ -42,11 +42,11 @@ func collectStats(container Container, since int64) {
 	fo.Close()
 	fe.Close()
 	
-	gzipFile(container.ID+"_tmp")
-	gzipFile(container.ID+"_tmp_err")
+	minio.GzipFile(container.ID+"_tmp")
+	minio.GzipFile(container.ID+"_tmp_err")
 
-	storeOnMinio(container.ID+"_tmp.gz", "runs", generateKey("logs.gz"))
-	storeOnMinio(container.ID+"_tmp_err.gz", "runs", generateKey("logs_err.gz"))
+	minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minio.GenerateKey("logs.gz"))
+	minio.StoreOnMinio(container.ID+"_tmp_err.gz", "runs", minio.GenerateKey("logs_err.gz"))
 }
 
 func storeData(w http.ResponseWriter, r *http.Request) {
@@ -61,45 +61,6 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		collectStats(containers[i], sinceInt)
 	}
 }
-
-func generateKey(fileName string) string{
-	return ("hash/BID/1/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
-}
-
-func gzipFile(fileName string) {
-	cmd := exec.Command("gzip", fileName)
-	err := cmd.Start()
-	cmd.Wait()
-	if err != nil {
-		panic(err)
-		}
-	}
-
-func storeOnMinio(fileName string, bucket string, key string) {
-	config := minio.Config{
-		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
-		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
-		Endpoint:        os.Getenv("MINIO_HOST"),
-		}
-		s3Client, err := minio.New(config)
-	    if err != nil {
-	        log.Fatalln(err)
-	    }  
-	    object, err := os.Open(fileName)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer object.Close()
-		objectInfo, err := object.Stat()
-		if err != nil {
-			object.Close()
-			log.Fatalln(err)
-		}
-		err = s3Client.PutObject("benchmarks", key, "application/octet-stream", objectInfo.Size(), object)
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}
 
 func createDockerClient() docker.Client {
 	path := os.Getenv("DOCKER_CERT_PATH")
