@@ -9,7 +9,7 @@ import (
 	"sync"
 	"github.com/fsouza/go-dockerclient"
 	//"github.com/minio/minio-go"
-	"github.com/Cerfoglg/commons/src/minio"
+	"github.com/benchflow/commons/src/minio"
 )
 
 type Container struct {
