@@ -5,22 +5,21 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
-	"time"
 	"sync"
 	"github.com/fsouza/go-dockerclient"
-	"github.com/minio/minio-go"
+	//"github.com/minio/minio-go"
+	"github.com/benchflow/commons/src/minio"
 )
 
 type Container struct {
 	ID           string
 	statsChannel chan *docker.Stats
-	doneChannel chan bool
 }
 
 var containers []Container
 var stopChannel chan bool
+var doneChannel chan bool
 var waitGroup sync.WaitGroup
 var collecting bool
 
@@ -30,12 +29,13 @@ func attachToContainer(client docker.Client, container Container) {
 			ID:      container.ID,
 			Stats:   container.statsChannel,
 			Stream:  true,
-			Done:    container.doneChannel,
-			Timeout: time.Duration(10),
+			Done:    doneChannel,
+			Timeout: 0,
 		})
 		if err != nil {
-			log.Fatal(err)
+			//log.Fatal(err)
 		}
+		//fmt.Println("Stopped collecting")
 	}()
 }
 
@@ -46,10 +46,10 @@ func collectStats(container Container) {
 		for true {
 			select {
 			case <- stopChannel:
-				//container.doneChannel <- true
+				close(doneChannel)
 				fo.Close()
-				gzipFile(container.ID+"_tmp")
-				//storeOnMinio(container.ID+"_tmp.gz", "runs", generateKey("stats.gz"))
+				minio.GzipFile(container.ID+"_tmp")
+				minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minio.GenerateKey("stats.gz"))
 				waitGroup.Done()
 				return
 			default:
@@ -62,55 +62,16 @@ func collectStats(container Container) {
 	}()
 }
 
-func generateKey(fileName string) string{
-	return ("hash/BID/1/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
-}
-
-func gzipFile(fileName string) {
-	cmd := exec.Command("gzip", fileName)
-	err := cmd.Start()
-	cmd.Wait()
-	if err != nil {
-		panic(err)
-		}
-	}
-
-func storeOnMinio(fileName string, bucket string, key string) {
-	config := minio.Config{
-		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
-		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
-		Endpoint:        os.Getenv("MINIO_HOST"),
-		}
-		s3Client, err := minio.New(config)
-	    if err != nil {
-	        log.Fatalln(err)
-	    }  
-	    object, err := os.Open(fileName)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer object.Close()
-		objectInfo, err := object.Stat()
-		if err != nil {
-			object.Close()
-			log.Fatalln(err)
-		}
-		err = s3Client.PutObject(bucket, key, "application/octet-stream", objectInfo.Size(), object)
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}
-
 func createDockerClient() docker.Client {
-	path := os.Getenv("DOCKER_CERT_PATH")
-	endpoint := "tcp://"+os.Getenv("DOCKER_HOST")+":2376"
-	//endpoint = "tcp://192.168.99.100:2376"
-    ca := fmt.Sprintf("%s/ca.pem", path)
-    cert := fmt.Sprintf("%s/cert.pem", path)
-    key := fmt.Sprintf("%s/key.pem", path)
-    client, err := docker.NewTLSClient(endpoint, cert, key, ca)
-	//endpoint := "unix:///var/run/docker.sock"
-    //client, err := docker.NewClient(endpoint)
+	//path := os.Getenv("DOCKER_CERT_PATH")
+	//endpoint := "tcp://"+os.Getenv("DOCKER_HOST")+":2376"
+	//endpoint := "tcp://192.168.99.100:2376"
+    //ca := fmt.Sprintf("%s/ca.pem", path)
+    //cert := fmt.Sprintf("%s/cert.pem", path)
+    //key := fmt.Sprintf("%s/key.pem", path)
+    //client, err := docker.NewTLSClient(endpoint, cert, key, ca)
+	endpoint := "unix:///var/run/docker.sock"
+    client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatal(err)
 		}
@@ -127,10 +88,10 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	conts := strings.Split(contEV, ":")
 	containers = []Container{}
 	stopChannel = make(chan bool)
+	doneChannel = make(chan bool)
 	for _, each := range conts {
 		statsChannel := make(chan *docker.Stats)
-		doneChannel := make(chan bool)
-		c := Container{ID: each, statsChannel: statsChannel, doneChannel: doneChannel}
+		c := Container{ID: each, statsChannel: statsChannel}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
