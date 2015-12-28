@@ -43,6 +43,7 @@ deploy:
   file: 
     - files/zip/bin/zip
     - dbms/mysql/mysqldump/bin/mysqldump
+    - environment/logs/bin/logs
   skip_cleanup: true
   on:
     tags: false
