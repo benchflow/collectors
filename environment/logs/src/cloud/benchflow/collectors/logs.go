@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/fsouza/go-dockerclient"
-	//"github.com/minio/minio-go"
 	"github.com/benchflow/commons/minio"
 	"log"
 	"net/http"
