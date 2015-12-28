@@ -17,6 +17,7 @@ save_dependencies:
 	cd ../../../..
 
 get_commons_dependencies:
+	pwd
 	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/minio/
 	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/minio/minio.go https://github.com/benchflow/commons/raw/dev/minio/go/src/cloud/benchflow/commons/minio/minio.go
 
