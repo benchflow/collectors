@@ -2,7 +2,7 @@ REPONAME = collectors
 NAME = zip
 DOCKERIMAGENAME = benchflow/$(REPONAME):$(NAME)
 VERSION = dev
-GOPATH_SAVE_RESTORE:=$(GOPATH):`pwd`
+GOPATH_SAVE_RESTORE:=`pwd`"/Godeps/_workspace"
 
 .PHONY: all get_commons_dependencies build_release 
 
