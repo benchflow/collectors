@@ -5,7 +5,7 @@ import (
     "net/http"
     "os"
     "strings"
-    "github.com/benchflow/commons/src/minio"
+    "github.com/benchflow/commons/minio"
 )
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {

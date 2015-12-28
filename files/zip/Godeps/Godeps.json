@@ -1,6 +1,6 @@
 {
 	"ImportPath": "cloud/benchflow/collectors",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.5.2",
 	"Packages": [
 		"./..."
 	],
@@ -12,3 +12,7 @@
 		}
 	]
 }
+/*
+	Commons dependency: github.com/benchflow/commons/minio
+	Managed by: make get_commons_dependencies
+*/

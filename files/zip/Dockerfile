@@ -1,20 +1,16 @@
-FROM golang
- 
-RUN apt-get update \
-    && apt-get -y install gzip \
-    && apt-get clean
+FROM benchflow/base-images:envconsul_dev
 
-ADD src/cloud/benchflow/collectors /go/src/cloud/benchflow/collectors
+MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
-RUN go get github.com/minio/minio-go
-RUN go install cloud/benchflow/collectors
+ENV COLLECTOR_NAME zip
+ENV COLLECTOR_VERSION v-dev
 
-ENV CONTAINER_NAME wfms-zip
-ENV TO_ZIP /media
-ENV MINIO_HOST http://192.168.99.100:9000
-ENV MINIO_ACCESS_KEY_ID dummy
-ENV MINIO_SECRET_ACCESS_KEY dummy
+RUN apk --update add wget gzip && \
+    wget -q --no-check-certificate -O /app/$COLLECTOR_NAME https://github.com/benchflow/collectors/releases/download/$COLLECTOR_VERSION/$COLLECTOR_NAME && \
+    chmod +x /app/$COLLECTOR_NAME && \
+    apk del --purge wget && \
+    rm -rf /var/cache/apk/*
 
-ENTRYPOINT /go/bin/collectors
- 
+COPY ./services/300-files-zip-collector.conf /apps/chaperone.d/300-files-zip-collector.conf
+
 EXPOSE 8080
