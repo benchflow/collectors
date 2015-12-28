@@ -1,0 +1,13 @@
+FROM benchflow/base-images:envconsul_dev
+
+MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
+
+#TODO: pin version of mysql-client
+RUN apk --update add gzip mysql-client && \
+    rm -rf /var/cache/apk/*
+
+COPY ./bin/mysqldump_linux /app/mysqldump
+RUN chmod +x /app/mysqldump
+COPY ./services/300-dbms-mysql-mysqldump-collector.conf /apps/chaperone.d/300-dbms-mysql-mysqldump-collector.conf
+ 
+EXPOSE 8080
