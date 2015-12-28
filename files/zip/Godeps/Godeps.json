@@ -15,4 +15,5 @@
 /*
 	Commons dependency: github.com/benchflow/commons/minio
 	Managed by: make get_commons_dependencies
+	Depends on: github.com/minio/minio-go, defined in this file
 */
