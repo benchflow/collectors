@@ -5,9 +5,7 @@ import (
     "net/http"
     "os"
     "os/exec"
-    //"github.com/minio/minio-go"
     "github.com/benchflow/commons/minio"
-    //"log"
     "strings"
 )
 
