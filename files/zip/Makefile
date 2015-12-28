@@ -4,9 +4,9 @@ DOCKERIMAGENAME = benchflow/$(REPONAME):$(NAME)
 VERSION = dev
 GOPATH_SAVE_RESTORE:=$(GOPATH):`pwd`
 
-.PHONY: all build_release 
+.PHONY: all get_commons_dependencies build_release 
 
-all: build_release
+all: get_commons_dependencies build_release
 
 save_dependencies:
 	cd src/cloud/benchflow/$(REPONAME)/ && \
