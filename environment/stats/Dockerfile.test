@@ -1,0 +1,12 @@
+FROM benchflow/base-images:envconsul_dev
+
+MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
+
+RUN apk --update add gzip && \
+    rm -rf /var/cache/apk/*
+
+COPY ./bin/stats_linux /app/stats
+RUN chmod +x /app/stats
+COPY ./services/300-environment-stats-collector.conf /apps/chaperone.d/300-environment-stats-collector.conf
+ 
+EXPOSE 8080

@@ -1,21 +1,16 @@
-FROM golang
- 
-RUN apt-get update \
-    && apt-get -y install gzip \
-    && apt-get clean
- 
-ADD src/cloud/benchflow/collectors /go/src/cloud/benchflow/collectors
+FROM benchflow/base-images:envconsul_dev
 
-RUN go get github.com/fsouza/go-dockerclient
-RUN go get github.com/minio/minio-go
-RUN go install cloud/benchflow/collectors
+MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
-ENV CONTAINER_NAME wfms-CPU
-ENV CONTAINERS db
-ENV MINIO_HOST http://192.168.99.100:9000
-ENV MINIO_ACCESS_KEY_ID dummy
-ENV MINIO_SECRET_ACCESS_KEY dummy
+ENV COLLECTOR_NAME stats
+ENV COLLECTOR_VERSION v-dev
 
-ENTRYPOINT /go/bin/collectors
- 
+RUN apk --update add wget gzip && \
+    wget -q --no-check-certificate -O /app/$COLLECTOR_NAME https://github.com/benchflow/collectors/releases/download/$COLLECTOR_VERSION/$COLLECTOR_NAME && \
+    chmod +x /app/$COLLECTOR_NAME && \
+    apk del --purge wget && \
+    rm -rf /var/cache/apk/*
+
+COPY ./services/300-environment-stats-collector.conf /apps/chaperone.d/300-environment-stats-collector.conf
+
 EXPOSE 8080
