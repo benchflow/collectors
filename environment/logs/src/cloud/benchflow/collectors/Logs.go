@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/fsouza/go-dockerclient"
 	//"github.com/minio/minio-go"
-	"github.com/benchflow/commons/src/minio"
+	"github.com/benchflow/commons/minio"
 	"log"
 	"net/http"
 	"os"
