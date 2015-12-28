@@ -9,8 +9,10 @@ build_release:
 	$(MAKE) -C ./files/zip
 	$(MAKE) -C ./dbms/mysql/mysqldump
 	$(MAKE) -C ./environment/logs
+	$(MAKE) -C ./environment/stats
 
 test:
 	$(MAKE) -C ./files/zip
 	$(MAKE) -C ./dbms/mysql/mysqldump
 	$(MAKE) -C ./environment/logs
+	$(MAKE) -C ./environment/stats
