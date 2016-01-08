@@ -5,32 +5,26 @@ import (
 	"os"
 	"os/exec"
 	"log"
+	//"fmt"
 )
 
 func StoreOnMinio(fileName string, bucket string, key string) {
-	config := minio.Config{
-		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
-		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
-		Endpoint:        os.Getenv("MINIO_HOST"),
+		s3Client, err := minio.New("195.176.181.55:9000", "CYNQML6R7V12MTT32W6P", "SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn", true)
+		if err != nil {
+			log.Fatalln(err)
 		}
-		s3Client, err := minio.New(config)
-	    if err != nil {
-	        log.Fatalln(err)
-	    }  
-	    object, err := os.Open(fileName)
+		object, err := os.Open(fileName)
 		if err != nil {
 			log.Fatalln(err)
 		}
 		defer object.Close()
-		objectInfo, err := object.Stat()
-		if err != nil {
-			object.Close()
-			log.Fatalln(err)
-		}
-		err = s3Client.PutObject(bucket, key, "application/octet-stream", objectInfo.Size(), object)
+	
+		st, _ := object.Stat()
+		n, err := s3Client.PutObject(bucket, key, object, st.Size(), "application/octet-stream")
 		if err != nil {
 			log.Fatalln(err)
 		}
+		log.Println("Uploaded", "my-objectname", " of size: ", n, "Successfully.")
 	}
 
 func GenerateKey(fileName string) string{

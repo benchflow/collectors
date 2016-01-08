@@ -4,16 +4,20 @@ RUN apt-get update \
     && apt-get -y install gzip \
     && apt-get clean
 
-ADD src/cloud/benchflow/collectors /go/src/cloud/benchflow/collectors
+COPY src /go/src
 
-RUN go get github.com/minio/minio-go
 RUN go install cloud/benchflow/collectors
 
-ENV CONTAINER_NAME wfms-zip
+ENV CONTAINER_NAME zip
 ENV TO_ZIP /media
-ENV MINIO_HOST http://192.168.99.100:9000
-ENV MINIO_ACCESS_KEY_ID dummy
-ENV MINIO_SECRET_ACCESS_KEY dummy
+ENV MINIO_HOST http://195.176.181.55:9000
+ENV MINIO_ACCESS_KEY_ID CYNQML6R7V12MTT32W6P
+ENV MINIO_SECRET_ACCESS_KEY SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn
+ENV KAFKA_HOST 195.176.181.55
+ENV TRIAL_ID A_1
+ENV COLLECTOR_NAME zip
+ENV CONTAINER_NAME zip
+ENV DATA_NAME zip
 
 ENTRYPOINT /go/bin/collectors
  

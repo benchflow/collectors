@@ -2,7 +2,7 @@ REPONAME = collectors
 NAME = zip
 DOCKERIMAGENAME = benchflow/$(REPONAME):$(NAME)
 VERSION = dev
-GOPATH_SAVE_RESTORE:=`pwd`"/Godeps/_workspace"
+GOPATH_SAVE_RESTORE:=$(GOPATH):`pwd`
 
 .PHONY: all get_commons_dependencies build_release 
 
@@ -44,12 +44,20 @@ test:
 	godep go test ./...
 
 build_container_local:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME)_linux -v ./...
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -v ./...
+	godep go install -v ./...
+	mv bin/$(REPONAME) bin/$(NAME)
 	docker build -t $(DOCKERIMAGENAME)_$(VERSION) -f Dockerfile.test .
-	rm bin/$(NAME)_linux
-
+	rm bin/$(NAME)
+	
 test_container_local:
+	docker run -ti --rm -e "TRIAL_ID=1_1" -e "KAFKA_HOST=195.176.181.55" -e "TO_ZIP=/media" -e "CONTAINER_NAME=$(NAME)" -e "ENVCONSUL_CONSUL=195.176.181.55:8500" \
+	-e "COLLECTOR_NAME=$(NAME)" -e "DATA_NAME=$(NAME)" -e "MINIO_HOST=http://195.176.181.55:9000" -e "MINIO_SECRET_ACCESS_KEY=CYNQML6R7V12MTT32W6P" \
+	-e "MINIO_ACCESS_KEY_ID=SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn" \
+	-p 8080:8080 --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
 	#TODO
 
+build_and_test_container_local: build_container_local test_container_local
+	
 rm_container_local:
-	#TODO
+	docker rm -f -v $(NAME)
