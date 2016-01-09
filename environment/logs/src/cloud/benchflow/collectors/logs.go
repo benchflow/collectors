@@ -128,10 +128,11 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 		cmd.Stderr = &stderr
 		err := cmd.Run()
 		if err != nil {
-		    fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
+			log.Println(err)
+		    log.Println(stderr.String())
 		    return
 		}
-		fmt.Println("Result: " + out.String())
+		log.Println("Result: " + out.String())
 	}
 
 func main() {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"log"
+	"strings"
 )
 
 func StoreOnMinio(fileName string, bucket string, key string) {
@@ -33,9 +34,11 @@ func StoreOnMinio(fileName string, bucket string, key string) {
 		}
 	}
 
-func GenerateKey(fileName string) string{
+func GenerateKey(fileName string) string {
 	// TODO: Use the hash library to generate a hash
-	return ("hash/BID/1/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
+	trialId := os.Getenv("TRIAL_ID")
+	t := strings.Split(trialId, "_")
+	return ("hash/"+t[0]+"/"+t[1]+"/"+os.Getenv("CONTAINER_NAME")+"/"+os.Getenv("COLLECTOR_NAME")+"/"+os.Getenv("DATA_NAME")+"/"+fileName)
 }
 
 func GzipFile(fileName string) {
@@ -45,5 +48,5 @@ func GzipFile(fileName string) {
 	if err != nil {
 		panic(err)
 		}
-	}
+}
 

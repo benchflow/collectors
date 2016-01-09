@@ -19,38 +19,23 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/minio/minio-go"
 )
 
 func main() {
-	// Note: my-bucketname and my-prefixname are dummy values, please replace them with original values.
-
-	// Requests are always secure by default. set inSecure=true to enable insecure access.
-	// inSecure boolean is the last argument for New().
-
-	// New provides a client object backend by automatically detected signature type based
-	// on the provider.
-	s3Client, err := minio.New("play.minio.io:9002", "Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", false)
+	config := minio.Config{
+		Endpoint: "https://play.minio.io:9000",
+	}
+	s3Client, err := minio.New(config)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	// Create a done channel to control 'ListObjects' go routine.
-	doneCh := make(struct{})
-
-	// Indicate to our routine to exit cleanly upon return.
-	defer close(doneCh)
-
-	// List all objects from a bucket-name with a matching prefix.
-	for object := range s3Client.ListObjects("my-bucketname", "my-prefixname", true, doneCh) {
+	for object := range s3Client.ListObjects("mybucket", "", true) {
 		if object.Err != nil {
-			fmt.Println(object.Err)
-			return
+			log.Fatalln(object.Err)
 		}
-		fmt.Println(object)
+		log.Println(object.Stat)
 	}
-	return
 }
