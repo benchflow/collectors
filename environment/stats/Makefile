@@ -55,7 +55,7 @@ test_container_local:
 	-e "CONTAINER_NAME=$(NAME)" -e "COLLECTOR_NAME=$(NAME)" -e "DATA_NAME=$(NAME)" \
 	-e "MINIO_HOST=http://195.176.181.55:9000" -e "MINIO_SECRET_ACCESS_KEY=CYNQML6R7V12MTT32W6P" \
 	-e "MINIO_ACCESS_KEY_ID=SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn" \
-	-p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
+	-p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock:ro --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
 
 rm_container_local:
 	docker rm -f -v db
