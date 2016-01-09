@@ -19,5 +19,9 @@ RUN apk --update add wget gzip mysql-client && \
 RUN /app/mc -C "/app" config host add http://195.176.181.55:9000 CYNQML6R7V12MTT32W6P SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn
 
 COPY ./services/300-dbms-mysql-mysqldump-collector.conf /apps/chaperone.d/300-dbms-mysql-mysqldump-collector.conf
+#TODO: remove, here for testing purposes
+RUN touch /app/test.tpl
+#TODO: remove, here because of a problem killing the container
+RUN rm /apps/chaperone.d/200-envconsul-envcp.conf
 
 EXPOSE 8080
