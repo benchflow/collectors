@@ -4,21 +4,81 @@ import (
     "fmt"
     "net/http"
     "os"
+    "os/exec"
+    "encoding/json"
+    "log"
     "strings"
+    "bytes"
     "github.com/benchflow/commons/minio"
+    "github.com/Shopify/sarama"
 )
+
+type KafkaMessage struct {
+	Minio_key string `json:"minio_key"`
+	Trial_id string `json:"trial_id"`
+	}
+
+func signalOnKafka(minioKey string) {
+	kafkaMsg := KafkaMessage{Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID")}
+	jsMessage, err := json.Marshal(kafkaMsg)
+	if err != nil {
+		log.Printf("Failed to marshall json message")
+		}
+	producer, err := sarama.NewSyncProducer([]string{os.Getenv("KAFKA_HOST")+":9092"}, nil)
+	if err != nil {
+	    log.Fatalln(err)
+	}
+	defer func() {
+	    if err := producer.Close(); err != nil {
+	        log.Fatalln(err)
+	    }
+	}()
+	msg := &sarama.ProducerMessage{Topic: os.Getenv("COLLECTOR_NAME"), Value: sarama.StringEncoder(jsMessage)}
+	partition, offset, err := producer.SendMessage(msg)
+	if err != nil {
+	    log.Printf("FAILED to send message: %s\n", err)
+	    } else {
+	    log.Printf("> message sent to partition %d at offset %d\n", partition, offset)
+	    }
+	}
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
     ev := os.Getenv("TO_ZIP")
     paths := strings.Split(ev, ":")
     for _, each := range paths {
-        fmt.Fprintf(w, "Trying to zip %s\n", each)   
-	    minio.GzipFile(each)
-	    minio.StoreOnMinio(each+".gz", "runs", minio.GenerateKey(each+".gz"))
+        fmt.Fprintf(w, "Trying to zip %s\n", each)
+        folderList := strings.Split(each, "/")
+	    folderName := folderList[len(folderList)-1]
+        cmd := exec.Command("tar", "-zcvf", folderName+".tar.gz", each)
+		err := cmd.Start()
+		cmd.Wait()
+		if err != nil {
+			panic(err)
+			}  
+	    minioKey := minio.GenerateKey(folderName+".tar.gz")
+		callMinioClient(folderName+".tar.gz", os.Getenv("MINIO_HOST"), minioKey)
+	    //minio.StoreOnMinio(folderName+".tar.gz", "runs", minioKey)
+	    signalOnKafka(minioKey)
 	}
-	
 	fmt.Fprintf(w, "SUCCESS")
 }
+
+func callMinioClient(fileName string, minioHost string, minioKey string) {
+		//TODO: change, we are using sudo to elevate the priviledge in the container, but it is not nice
+		//NOTE: it seems that the commands that are not in PATH, should be launched using sh -c
+		log.Printf("sh -c sudo /app/mc --quiet cp " + fileName + " " + minioHost + "/runs/" + minioKey)
+		cmd := exec.Command("sh", "-c", "sudo /app/mc --quiet cp " + fileName + " " + minioHost + "/runs/" + minioKey)
+    	var out bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if err != nil {
+		    fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
+		    return
+		}
+		fmt.Println("Result: " + out.String())
+	}
  
 func main() {
     http.HandleFunc("/data", backupHandler)

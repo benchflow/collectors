@@ -49,7 +49,14 @@ build_container_local:
 	rm bin/$(NAME)_linux
 
 test_container_local:
-	#TODO
+	docker run -d -e "MYSQL_ALLOW_EMPTY_PASSWORD=true" --name db mysql 
+	docker run -d -e "CONTAINERS=db" -e "ENVCONSUL_CONSUL=195.176.181.55:8500" \
+	-e "TRIAL_ID=1_1" -e "KAFKA_HOST=195.176.181.55" -e "COLLECTOR_NAME=stats" \
+	-e "CONTAINER_NAME=$(NAME)" -e "COLLECTOR_NAME=$(NAME)" -e "DATA_NAME=$(NAME)" \
+	-e "MINIO_HOST=http://195.176.181.55:9000" -e "MINIO_SECRET_ACCESS_KEY=CYNQML6R7V12MTT32W6P" \
+	-e "MINIO_ACCESS_KEY_ID=SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn" \
+	-p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
 
 rm_container_local:
-	#TODO
+	docker rm -f -v db
+	docker rm -f -v $(NAME)

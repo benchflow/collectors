@@ -5,9 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"bytes"
 	"strings"
 	"sync"
 	"github.com/fsouza/go-dockerclient"
+	"github.com/Shopify/sarama"
+	"encoding/json"
 	//"github.com/minio/minio-go"
 	"github.com/benchflow/commons/minio"
 )
@@ -22,6 +26,35 @@ var stopChannel chan bool
 var doneChannel chan bool
 var waitGroup sync.WaitGroup
 var collecting bool
+
+type KafkaMessage struct {
+	Minio_key string `json:"minio_key"`
+	Trial_id string `json:"trial_id"`
+	}
+
+func signalOnKafka(minioKey string) {
+	kafkaMsg := KafkaMessage{Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID")}
+	jsMessage, err := json.Marshal(kafkaMsg)
+	if err != nil {
+		log.Printf("Failed to marshall json message")
+		}
+	producer, err := sarama.NewSyncProducer([]string{os.Getenv("KAFKA_HOST")+":9092"}, nil)
+	if err != nil {
+	    log.Fatalln(err)
+	}
+	defer func() {
+	    if err := producer.Close(); err != nil {
+	        log.Fatalln(err)
+	    }
+	}()
+	msg := &sarama.ProducerMessage{Topic: os.Getenv("COLLECTOR_NAME"), Value: sarama.StringEncoder(jsMessage)}
+	partition, offset, err := producer.SendMessage(msg)
+	if err != nil {
+	    log.Printf("FAILED to send message: %s\n", err)
+	    } else {
+	    log.Printf("> message sent to partition %d at offset %d\n", partition, offset)
+	    }
+	}
 
 func attachToContainer(client docker.Client, container Container) {
 	go func() {
@@ -42,14 +75,20 @@ func attachToContainer(client docker.Client, container Container) {
 func collectStats(container Container) {
 	go func() {
 		var e docker.Env
-		fo, _ := os.Create(container.ID+"_tmp")
+		fo, err := os.Create("/app/"+container.ID+"_tmp")
+		if err != nil {
+	        panic(err)
+	    }
 		for true {
 			select {
 			case <- stopChannel:
 				close(doneChannel)
 				fo.Close()
-				minio.GzipFile(container.ID+"_tmp")
-				minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minio.GenerateKey("stats.gz"))
+				minio.GzipFile("/app/"+container.ID+"_tmp")
+				minioKey := minio.GenerateKey(container.ID+"_stats.gz")
+				callMinioClient("/app/"+container.ID+"_tmp.gz", os.Getenv("MINIO_HOST"), minioKey)
+				//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
+				signalOnKafka(minioKey)
 				waitGroup.Done()
 				return
 			default:
@@ -111,6 +150,23 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	collecting = false
 	fmt.Fprintf(w, "Stopped collecting")
 }
+
+func callMinioClient(fileName string, minioHost string, minioKey string) {
+		//TODO: change, we are using sudo to elevate the priviledge in the container, but it is not nice
+		//NOTE: it seems that the commands that are not in PATH, should be launched using sh -c
+		log.Printf("sh -c sudo /app/mc --quiet cp " + fileName + " " + minioHost + "/runs/" + minioKey)
+		cmd := exec.Command("sh", "-c", "sudo /app/mc --quiet cp " + fileName + " " + minioHost + "/runs/" + minioKey)
+    	var out bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if err != nil {
+		    fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
+		    return
+		}
+		fmt.Println("Result: " + out.String())
+	}
 
 func main() {
 	collecting = false

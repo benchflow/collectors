@@ -49,7 +49,19 @@ build_container_local:
 	rm bin/$(NAME)_linux
 
 test_container_local:
+	docker run -d --name db -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=stuff mysql
+	docker run -ti --rm -e "ENVCONSUL_CONSUL=195.176.181.55:8500" \
+	-e "TRIAL_ID=1_1" -e "KAFKA_HOST=195.176.181.55" -e "COLLECTOR_NAME=mysqldump" \
+	-e "MYSQL_DB_NAME=stuff" -e "TABLE_NAMES=test" -e "MYSQL_HOST=10.0.2.15" \
+	-e "MYSQL_PORT=3306" -e "MYSQL_USER=root" -e "MYSQL_USER_PASSWORD=password" \
+	-e "CONTAINER_NAME=$(NAME)" -e "COLLECTOR_NAME=$(NAME)" -e "DATA_NAME=$(NAME)" \
+	-e "MINIO_HOST=http://195.176.181.55:9000" -e "MINIO_SECRET_ACCESS_KEY=CYNQML6R7V12MTT32W6P" \
+	-e "MINIO_ACCESS_KEY_ID=SQ96V5pg02Z3kZ/0ViF9YY6GwWzZvoBmElpzEEjn" \
+	-p 8080:8080 --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
 	#TODO
-
+	
+build_and_test_container_local: build_container_local test_container_local
+	
 rm_container_local:
-	#TODO
+	docker rm -f -v db
+	docker rm -f -v $(NAME)
