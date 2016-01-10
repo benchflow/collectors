@@ -97,7 +97,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     for _, each := range tables {
 	    cmd := exec.Command("mysql", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "-e", "USE "+os.Getenv("MYSQL_DB_NAME")+"; SHOW FIELDS FROM "+each+";")
 	    cmd2 := exec.Command("sed", "s/\\t/\",\"/g;s/^/\"/;s/$/\"/;s/\\n//g")
-	    outfile, err := os.Create("/app/backup.csv")
+	    outfile, err := os.Create("/app/backup_schema.csv")
 	    // outfile, err := os.Open("/app/backup.csv")
 	    if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
@@ -113,8 +113,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        panic(err)
 	    }
 	    outfile.Close()
-	    minio.GzipFile("/app/backup.csv")
-	    callMinioClient("/app/backup.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/"+each+"_schema.csv.gz")
+	    minio.GzipFile("/app/backup_schema.csv")
+	    callMinioClient("/app/backup_schema.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/"+each+"_schema.csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+"_schema.csv.gz")
 	}
     signalOnKafka(databaseMinioKey)
