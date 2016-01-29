@@ -136,21 +136,7 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 		    return
 		}
 		fmt.Println("Result: " + out.String())
-	}
-
-// func addMinioHost(minioHost string) {
-// 		cmd := exec.Command("/bin/mc", "config", "host", "add", minioHost, os.Getenv("MINIO_SECRET_ACCESS_KEY"), os.Getenv("MINIO_ACCESS_KEY_ID"))
-//     	var out bytes.Buffer
-// 		var stderr bytes.Buffer
-// 		cmd.Stdout = &out
-// 		cmd.Stderr = &stderr
-// 		err := cmd.Run()
-// 		if err != nil {
-// 		    fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
-// 		    return
-// 		}
-// 		fmt.Println("Result: " + out.String())
-// 	}
+}
  
 func main() {
 

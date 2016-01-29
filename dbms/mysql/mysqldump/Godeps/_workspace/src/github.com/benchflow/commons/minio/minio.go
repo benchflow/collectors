@@ -10,8 +10,8 @@ import (
 
 func StoreOnMinio(fileName string, bucket string, key string) {
 	config := minio.Config{
-		AccessKeyID:     os.Getenv("MINIO_ACCESS_KEY_ID"),
-		SecretAccessKey: os.Getenv("MINIO_SECRET_ACCESS_KEY"),
+		AccessKeyID:     os.Getenv("MINIO_ACCESSKEYID"),
+		SecretAccessKey: os.Getenv("MINIO_SECRETACCESSKEY"),
 		Endpoint:        os.Getenv("MINIO_HOST"),
 		}
 		s3Client, err := minio.New(config)
