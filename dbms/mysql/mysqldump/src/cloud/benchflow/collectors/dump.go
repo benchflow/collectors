@@ -153,7 +153,7 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 // 	}
  
 func main() {
-	//addMinioHost("http://195.176.181.55:9000")
+
     http.HandleFunc("/data", backupHandler)
     http.ListenAndServe(":8080", nil)
 }
