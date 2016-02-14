@@ -78,12 +78,12 @@ func collectStats(container Container, since int64) {
 	minio.GzipFile(container.ID+"_tmp_err")
 	
 	minioKey := minio.GenerateKey("logs.gz")
-	callMinioClient(container.ID+"_tmp.gz", os.Getenv("MINIO_HOST"), minioKey)
+	callMinioClient(container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
 	//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
 	signalOnKafka(minioKey)
 	
 	minioKey = minio.GenerateKey("logs_err.gz")
-	callMinioClient(container.ID+"_tmp_err.gz", os.Getenv("MINIO_HOST"), minioKey)
+	callMinioClient(container.ID+"_tmp_err.gz", os.Getenv("MINIO_ALIAS"), minioKey)
 	//minio.StoreOnMinio(container.ID+"_tmp_err.gz", "runs", minioKey)
 	signalOnKafka(minioKey)
 }

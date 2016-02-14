@@ -86,7 +86,7 @@ func collectStats(container Container) {
 				fo.Close()
 				minio.GzipFile("/app/"+container.ID+"_tmp")
 				minioKey := minio.GenerateKey(container.ID+"_stats.gz")
-				callMinioClient("/app/"+container.ID+"_tmp.gz", os.Getenv("MINIO_HOST"), minioKey)
+				callMinioClient("/app/"+container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
 				//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
 				signalOnKafka(minioKey)
 				waitGroup.Done()

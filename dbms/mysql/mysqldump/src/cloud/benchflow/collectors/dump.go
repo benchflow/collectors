@@ -82,7 +82,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    }
 	    outfile.Close()
 	    minio.GzipFile("/app/backup.csv")
-	    callMinioClient("/app/backup.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/"+each+".csv.gz")
+	    callMinioClient("/app/backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+".csv.gz")
 	}
     
@@ -114,7 +114,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    }
 	    outfile.Close()
 	    minio.GzipFile("/app/backup_schema.csv")
-	    callMinioClient("/app/backup_schema.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/"+each+"_schema.csv.gz")
+	    callMinioClient("/app/backup_schema.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+"_schema.csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+"_schema.csv.gz")
 	}
     signalOnKafka(databaseMinioKey)
