@@ -19,39 +19,25 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/minio/minio-go"
 )
 
 func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY, my-bucketname and my-prefixname
-	// are dummy values, please replace them with original values.
-
-	// Requests are always secure (HTTPS) by default. Set insecure=true to enable insecure (HTTP) access.
-	// This boolean value is the last argument for New().
-
-	// New returns an Amazon S3 compatible client object. API copatibality (v2 or v4) is automatically
-	// determined based on the Endpoint value.
-	s3Client, err := minio.New("s3.amazonaws.com", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", false)
+	config := minio.Config{
+		AccessKeyID:     "YOUR-ACCESS-KEY-HERE",
+		SecretAccessKey: "YOUR-PASSWORD-HERE",
+		Endpoint:        "https://s3.amazonaws.com",
+	}
+	s3Client, err := minio.New(config)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalln(err)
 	}
-
-	// Create a done channel to control 'ListObjects' go routine.
-	doneCh := make(struct{})
-
-	// Indicate to our routine to exit cleanly upon return.
-	defer close(doneCh)
-
-	// List all objects from a bucket-name with a matching prefix.
-	for object := range s3Client.ListObjects("my-bucketname", "my-prefixname", true, doneCh) {
+	for object := range s3Client.ListObjects("mybucket", "", true) {
 		if object.Err != nil {
-			fmt.Println(object.Err)
-			return
+			log.Fatalln(object.Err)
 		}
-		fmt.Println(object)
+		log.Println(object.Stat)
 	}
-	return
 }

@@ -25,22 +25,19 @@ import (
 )
 
 func main() {
-	// Note: my-bucketname is a dummy value, please replace them with original value.
-
-	// Requests are always secure by default. set inSecure=true to enable insecure access.
-	// inSecure boolean is the last argument for New().
-
-	// New provides a client object backend by automatically detected signature type based
-	// on the provider.
-	s3Client, err := minio.New("play.minio.io:9002", "Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", false)
+	config := minio.Config{
+		AccessKeyID:     "YOUR-ACCESS-KEY-HERE",
+		SecretAccessKey: "YOUR-PASSWORD-HERE",
+		Endpoint:        "https://s3.amazonaws.com",
+	}
+	s3Client, err := minio.New(config)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	// This operation will only work if your bucket is empty.
-	err = s3Client.RemoveBucket("my-bucketname")
-	if err != nil {
-		log.Fatalln(err)
+	for err := range s3Client.DropAllIncompleteUploads("mybucket") {
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 	log.Println("Success")
-
 }

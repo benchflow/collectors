@@ -56,7 +56,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 			}  
 	    minioKey := minio.GenerateKey(folderName+".tar.gz")
-		callMinioClient(folderName+".tar.gz", os.Getenv("MINIO_HOST"), minioKey)
+		callMinioClient(folderName+".tar.gz", os.Getenv("MINIO_ALIAS"), minioKey)
 	    //minio.StoreOnMinio(folderName+".tar.gz", "runs", minioKey)
 	    signalOnKafka(minioKey)
 	}

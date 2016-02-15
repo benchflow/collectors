@@ -1,4 +1,4 @@
-FROM benchflow/base-images:envconsul_dev
+FROM benchflow/base-images:minio-client_dev
 
 MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
@@ -8,10 +8,6 @@ RUN apk --update add gzip && \
 COPY ./bin/zip /app/zip
 RUN chmod +x /app/zip
 #COPY ./services/300-files-zip-collector.conf /apps/chaperone.d/300-files-zip-collector.conf
-CMD /app/zip 
-#TODO: remove, here for testing purposes
-RUN touch /app/test.tpl
-#TODO: remove, here because of a problem killing the container
-RUN rm /apps/chaperone.d/200-envconsul-envcp.conf
+CMD /app/zip
  
 EXPOSE 8080

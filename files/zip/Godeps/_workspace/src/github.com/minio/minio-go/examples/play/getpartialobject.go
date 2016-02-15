@@ -19,26 +19,33 @@
 package main
 
 import (
+	"io"
 	"log"
+	"os"
 
 	"github.com/minio/minio-go"
 )
 
 func main() {
-	// Note: my-bucketname, my-objectname and my-filename.csv are dummy values, please replace them with original values.
-
-	// Requests are always secure (HTTPS) by default. Set insecure=true to enable insecure (HTTP) access.
-	// This boolean value is the last argument for New().
-
-	// New returns an Amazon S3 compatible client object. API copatibality (v2 or v4) is automatically
-	// determined based on the Endpoint value.
-	s3Client, err := minio.New("play.minio.io:9002", "Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", false)
+	config := minio.Config{
+		Endpoint: "https://play.minio.io:9000",
+	}
+	s3Client, err := minio.New(config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	reader, stat, err := s3Client.GetPartialObject("mybucket", "myobject", 0, 10)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	if _, err := s3Client.FPutObject("my-bucketname", "my-objectname", "my-filename.csv", "application/csv"); err != nil {
+	localfile, err := os.Create("testfile")
+	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Println("Successfully uploaded my-filename.csv")
+	defer localfile.Close()
+
+	if _, err = io.CopyN(localfile, reader, stat.Size); err != nil {
+		log.Fatalln(err)
+	}
 }

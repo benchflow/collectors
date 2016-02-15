@@ -20,27 +20,24 @@ package main
 
 import (
 	"log"
-	"time"
 
 	"github.com/minio/minio-go"
 )
 
 func main() {
-	// Note: my-bucketname and my-objectname are dummy values, please replace them with original values.
-
-	// Requests are always secure by default. set inSecure=true to enable insecure access.
-	// inSecure boolean is the last argument for New().
-
-	// New provides a client object backend by automatically detected signature type based
-	// on the provider.
-	s3Client, err := minio.New("play.minio.io:9002", "Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG", false)
+	config := minio.Config{
+		AccessKeyID:     "YOUR-ACCESS-KEY-HERE",
+		SecretAccessKey: "YOUR-PASSWORD-HERE",
+		Endpoint:        "https://s3.amazonaws.com",
+	}
+	s3Client, err := minio.New(config)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	presignedURL, err := s3Client.PresignedGetObject("my-bucketname", "my-objectname", time.Duration(1000)*time.Second)
-	if err != nil {
-		log.Fatalln(err)
+	for err := range s3Client.DropIncompleteUpload("mybucket", "myobject") {
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
-	log.Println(presignedURL)
+	log.Println("Success")
 }

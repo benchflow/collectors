@@ -25,19 +25,16 @@ import (
 )
 
 func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY, my-bucketname and my-objectname
-	// are dummy values, please replace them with original values.
-
-	// Requests are always secure (HTTPS) by default. Set insecure=true to enable insecure (HTTP) access.
-	// This boolean value is the last argument for New().
-
-	// New returns an Amazon S3 compatible client object. API copatibality (v2 or v4) is automatically
-	// determined based on the Endpoint value.
-	s3Client, err := minio.New("s3.amazonaws.com", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", false)
+	config := minio.Config{
+		AccessKeyID:     "YOUR-ACCESS-KEY-HERE",
+		SecretAccessKey: "YOUR-PASSWORD-HERE",
+		Endpoint:        "https://s3.amazonaws.com",
+	}
+	s3Client, err := minio.New(config)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	stat, err := s3Client.StatObject("my-bucketname", "my-objectname")
+	stat, err := s3Client.StatObject("mybucket", "myobject")
 	if err != nil {
 		log.Fatalln(err)
 	}

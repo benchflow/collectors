@@ -68,6 +68,23 @@ type listBucketResult struct {
 	Prefix     string
 }
 
+// multiPartUpload container for multipart session
+type multiPartUpload struct {
+	// Date and time at which the multipart upload was initiated.
+	Initiated time.Time `type:"timestamp" timestampFormat:"iso8601"`
+
+	Initiator initiator
+	Owner     owner
+
+	StorageClass string
+
+	// Key of the object for which the multipart upload was initiated.
+	Key string
+
+	// Upload ID that identifies the multipart upload.
+	UploadID string `xml:"UploadId"`
+}
+
 // listMultipartUploadsResult container for ListMultipartUploads response
 type listMultipartUploadsResult struct {
 	Bucket             string
@@ -78,7 +95,7 @@ type listMultipartUploadsResult struct {
 	EncodingType       string
 	MaxUploads         int64
 	IsTruncated        bool
-	Uploads            []ObjectMultipartStat `xml:"Upload"`
+	Uploads            []multiPartUpload `xml:"Upload"`
 	Prefix             string
 	Delimiter          string
 	CommonPrefixes     []commonPrefix // A response can contain CommonPrefixes only if you specify a delimiter
@@ -90,8 +107,8 @@ type initiator struct {
 	DisplayName string
 }
 
-// objectPart container for particular part of an object
-type objectPart struct {
+// partMetadata container for particular part of an object
+type partMetadata struct {
 	// Part number identifies the part.
 	PartNumber int
 
@@ -121,7 +138,7 @@ type listObjectPartsResult struct {
 
 	// Indicates whether the returned list of parts is truncated.
 	IsTruncated bool
-	ObjectParts []objectPart `xml:"Part"`
+	Parts       []partMetadata `xml:"Part"`
 
 	EncodingType string
 }
@@ -162,9 +179,7 @@ type createBucketConfiguration struct {
 	Location string   `xml:"LocationConstraint"`
 }
 
-// grant container for the grantee and his or her permissions.
 type grant struct {
-	// grantee container for DisplayName and ID of the person being granted permissions.
 	Grantee struct {
 		ID           string
 		DisplayName  string
@@ -175,9 +190,7 @@ type grant struct {
 	Permission string
 }
 
-// accessControlPolicy contains the elements providing ACL permissions for a bucket.
 type accessControlPolicy struct {
-	// accessControlList container for ACL information.
 	AccessControlList struct {
 		Grant []grant
 	}
