@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	//"github.com/minio/minio-go"
 	"github.com/benchflow/commons/minio"
+	"strconv"
 )
 
 type Container struct {
@@ -28,12 +29,17 @@ var waitGroup sync.WaitGroup
 var collecting bool
 
 type KafkaMessage struct {
+	SUT_name string `json:"SUT_name"`
+	SUT_version string `json:"SUT_version"`
 	Minio_key string `json:"minio_key"`
 	Trial_id string `json:"trial_id"`
+	Experiment_id string `json:"experiment_id"`
+	Total_trials_num int `json:"total_trials_num"`
 	}
 
 func signalOnKafka(minioKey string) {
-	kafkaMsg := KafkaMessage{Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID")}
+	totalTrials, _ := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
+	kafkaMsg := KafkaMessage{SUT_name: "Camunda", SUT_version: "", Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
 	jsMessage, err := json.Marshal(kafkaMsg)
 	if err != nil {
 		log.Printf("Failed to marshall json message")
