@@ -11,6 +11,7 @@ import (
     "bytes"
     "github.com/benchflow/commons/minio"
     "github.com/Shopify/sarama"
+    "strings"
 )
 
 type KafkaMessage struct {
