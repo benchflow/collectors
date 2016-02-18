@@ -11,7 +11,7 @@ import (
     "bytes"
     "github.com/benchflow/commons/minio"
     "github.com/Shopify/sarama"
-    "strings"
+    "strconv"
 )
 
 type KafkaMessage struct {
@@ -24,7 +24,7 @@ type KafkaMessage struct {
 	}
 
 func signalOnKafka(minioKey string) {
-	totalTrials := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
+	totalTrials, _ := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
 	kafkaMsg := KafkaMessage{SUT_name: "Camunda", SUT_version: "", Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
 	jsMessage, err := json.Marshal(kafkaMsg)
 	if err != nil {
