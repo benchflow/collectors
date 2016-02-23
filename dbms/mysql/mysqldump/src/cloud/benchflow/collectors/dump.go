@@ -59,13 +59,31 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	ev := os.Getenv("TABLE_NAMES")
     tables := strings.Split(ev, ":")
     
-    
     // cmdd := exec.Command("touch", "/app/backup.csv")
     // cmdd.Run()
     // cmdd.Wait()
     // cmdd = exec.Command("chmod", "777", "/app/backup.csv")
     // cmdd.Run()
     // cmdd.Wait()
+    
+    for _,each := range tables {
+		cmd := exec.Command("mysqldump", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), os.Getenv("MYSQL_DB_NAME"), each)
+		outfile, err := os.Create("/app/backup.sql")
+	    if err != nil {
+	        fmt.Fprintf(w, "ERROR:  %s", err)
+	        panic(err)
+	    }
+	    outfile.Close()
+	    cmd.Stdout = outfile
+	    err = cmd.Start()
+	    cmd.Wait()
+	    if err != nil {
+	        fmt.Fprintf(w, "ERROR:  %s", err)
+	        panic(err)
+	        }
+	    minio.GzipFile("/app/backup.sql")
+		callMinioClient("/app/backup.sql.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".sql.gz")
+	}
     
     // Save the tables
     for _, each := range tables {
