@@ -73,7 +73,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
 	    }
-	    outfile.Close()
 	    cmd.Stdout = outfile
 	    err = cmd.Start()
 	    cmd.Wait()
@@ -81,8 +80,14 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
 	        }
+	    outfile.Close()
 	    minio.GzipFile("/app/backup.sql")
 		callMinioClient("/app/backup.sql.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".sql.gz")
+		err = os.Remove("/app/backup.sql.gz")
+		if err != nil {
+	        fmt.Fprintf(w, "ERROR:  %s", err)
+	        panic(err)
+	    }
 	}
     
     // Save the tables
@@ -108,6 +113,11 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    minio.GzipFile("/app/backup.csv")
 	    callMinioClient("/app/backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+".csv.gz")
+		err = os.Remove("/app/backup.csv.gz")
+		if err != nil {
+	        fmt.Fprintf(w, "ERROR:  %s", err)
+	        panic(err)
+	    }
 	}
     
     // cmdd = exec.Command("touch", "/app/backup.csv")
@@ -140,6 +150,11 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    minio.GzipFile("/app/backup_schema.csv")
 	    callMinioClient("/app/backup_schema.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+"_schema.csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+"_schema.csv.gz")
+		err = os.Remove("/app/backup_schema.csv.gz")
+		if err != nil {
+	        fmt.Fprintf(w, "ERROR:  %s", err)
+	        panic(err)
+	    }
 	}
     signalOnKafka(databaseMinioKey)
 	fmt.Fprintf(w, "SUCCESS")
