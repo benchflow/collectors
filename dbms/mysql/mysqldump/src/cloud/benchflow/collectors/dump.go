@@ -57,7 +57,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Retrieve table names
 	ev := os.Getenv("TABLE_NAMES")
-    tables := strings.Split(ev, ":")
+    tables := strings.Split(ev, ",")
     
     // cmdd := exec.Command("touch", "/app/backup.csv")
     // cmdd.Run()
