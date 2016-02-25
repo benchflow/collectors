@@ -95,7 +95,7 @@ func collectStats(container Container, since int64) {
 
 func storeData(w http.ResponseWriter, r *http.Request) {
 	contEV := os.Getenv("CONTAINERS")
-	conts := strings.Split(contEV, ":")
+	conts := strings.Split(contEV, ",")
 	since := r.FormValue("since")
 	sinceInt, err := strconv.ParseInt(since, 10, 64)
 	if err != nil {
@@ -143,7 +143,7 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 func main() {
 	client = createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
-	conts := strings.Split(contEV, ":")
+	conts := strings.Split(contEV, ",")
 	for i, each := range conts {
 		c := Container{ID: each}
 		containers[i] = c

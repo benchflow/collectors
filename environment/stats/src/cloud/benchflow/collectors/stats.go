@@ -130,7 +130,7 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	}
 	client := createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
-	conts := strings.Split(contEV, ":")
+	conts := strings.Split(contEV, ",")
 	containers = []Container{}
 	stopChannel = make(chan bool)
 	doneChannel = make(chan bool)

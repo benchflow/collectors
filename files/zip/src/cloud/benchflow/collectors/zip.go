@@ -50,7 +50,7 @@ func signalOnKafka(minioKey string) {
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
     ev := os.Getenv("TO_ZIP")
-    paths := strings.Split(ev, ":")
+    paths := strings.Split(ev, ",")
     for _, each := range paths {
         fmt.Fprintf(w, "Trying to zip %s\n", each)
         folderList := strings.Split(each, "/")
