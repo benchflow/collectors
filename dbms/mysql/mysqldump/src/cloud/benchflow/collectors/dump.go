@@ -68,7 +68,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     
     for _,each := range tables {
 		cmd := exec.Command("mysqldump", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), os.Getenv("MYSQL_DB_NAME"), each)
-		outfile, err := os.Create("/app/backup.sql")
+		outfile, err := os.Create("/app/"+each+"_backup.sql")
 	    if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
@@ -81,9 +81,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        panic(err)
 	        }
 	    outfile.Close()
-	    minio.GzipFile("/app/backup.sql")
-		callMinioClient("/app/backup.sql.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".sql.gz")
-		err = os.Remove("/app/backup.sql.gz")
+	    minio.GzipFile("/app/"+each+"_backup.sql")
+		callMinioClient("/app/"+each+"_backup.sql.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".sql.gz")
+		err = os.Remove("/app/"+each+"_backup.sql.gz")
 		if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
@@ -94,7 +94,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     for _, each := range tables {
 	    cmd := exec.Command("mysql", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "-e", "USE "+os.Getenv("MYSQL_DB_NAME")+"; SELECT * FROM "+each+";")
 	    cmd2 := exec.Command("sed", "s/\\t/\",\"/g;s/^/\"/;s/$/\"/;s/\\n//g")
-	    outfile, err := os.Create("/app/backup.csv")
+	    outfile, err := os.Create("/app/"+each+"_backup.csv")
 	    // outfile, err := os.Open("/app/backup.csv")
 	    if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
@@ -110,10 +110,10 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        panic(err)
 	    }
 	    outfile.Close()
-	    minio.GzipFile("/app/backup.csv")
-	    callMinioClient("/app/backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".csv.gz")
+	    minio.GzipFile("/app/"+each+"_backup.csv")
+	    callMinioClient("/app/"+each+"_backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+".csv.gz")
-		err = os.Remove("/app/backup.csv.gz")
+		err = os.Remove("/app/"+each+"_backup.csv.gz")
 		if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
@@ -131,7 +131,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     for _, each := range tables {
 	    cmd := exec.Command("mysql", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "-e", "USE "+os.Getenv("MYSQL_DB_NAME")+"; SHOW FIELDS FROM "+each+";")
 	    cmd2 := exec.Command("sed", "s/\\t/\",\"/g;s/^/\"/;s/$/\"/;s/\\n//g")
-	    outfile, err := os.Create("/app/backup_schema.csv")
+	    outfile, err := os.Create("/app/"+each+"_backup_schema.csv")
 	    // outfile, err := os.Open("/app/backup.csv")
 	    if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
@@ -147,10 +147,10 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        panic(err)
 	    }
 	    outfile.Close()
-	    minio.GzipFile("/app/backup_schema.csv")
-	    callMinioClient("/app/backup_schema.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+"_schema.csv.gz")
+	    minio.GzipFile("/app/"+each+"_backup_schema.csv")
+	    callMinioClient("/app/"+each+"_backup_schema.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+"_schema.csv.gz")
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+"_schema.csv.gz")
-		err = os.Remove("/app/backup_schema.csv.gz")
+		err = os.Remove("/app/"+each+"_backup_schema.csv.gz")
 		if err != nil {
 	        fmt.Fprintf(w, "ERROR:  %s", err)
 	        panic(err)
