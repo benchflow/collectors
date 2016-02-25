@@ -39,7 +39,7 @@ type KafkaMessage struct {
 
 func signalOnKafka(minioKey string) {
 	totalTrials, _ := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
-	kafkaMsg := KafkaMessage{SUT_name: "Camunda", SUT_version: "", Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
+	kafkaMsg := KafkaMessage{SUT_name: os.Getenv("SUT_NAME"), SUT_version: os.Getenv("SUT_VERSION"), Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
 	jsMessage, err := json.Marshal(kafkaMsg)
 	if err != nil {
 		log.Printf("Failed to marshall json message")
@@ -130,7 +130,7 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	}
 	client := createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
-	conts := strings.Split(contEV, ":")
+	conts := strings.Split(contEV, ",")
 	containers = []Container{}
 	stopChannel = make(chan bool)
 	doneChannel = make(chan bool)

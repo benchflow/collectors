@@ -34,7 +34,7 @@ type KafkaMessage struct {
 
 func signalOnKafka(minioKey string) {
 	totalTrials, _ := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
-	kafkaMsg := KafkaMessage{SUT_name: "Camunda", SUT_version: "", Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
+	kafkaMsg := KafkaMessage{SUT_name: os.Getenv("SUT_NAME"), SUT_version: os.Getenv("SUT_VERSION"), Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
 	jsMessage, err := json.Marshal(kafkaMsg)
 	if err != nil {
 		log.Printf("Failed to marshall json message")
@@ -95,7 +95,7 @@ func collectStats(container Container, since int64) {
 
 func storeData(w http.ResponseWriter, r *http.Request) {
 	contEV := os.Getenv("CONTAINERS")
-	conts := strings.Split(contEV, ":")
+	conts := strings.Split(contEV, ",")
 	since := r.FormValue("since")
 	sinceInt, err := strconv.ParseInt(since, 10, 64)
 	if err != nil {
@@ -143,7 +143,7 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 func main() {
 	client = createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
-	conts := strings.Split(contEV, ":")
+	conts := strings.Split(contEV, ",")
 	for i, each := range conts {
 		c := Container{ID: each}
 		containers[i] = c

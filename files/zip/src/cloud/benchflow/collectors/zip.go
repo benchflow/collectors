@@ -25,7 +25,7 @@ type KafkaMessage struct {
 
 func signalOnKafka(minioKey string) {
 	totalTrials, _ := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
-	kafkaMsg := KafkaMessage{SUT_name: "Camunda", SUT_version: "", Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
+	kafkaMsg := KafkaMessage{SUT_name: os.Getenv("SUT_NAME"), SUT_version: os.Getenv("SUT_VERSION"), Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials}
 	jsMessage, err := json.Marshal(kafkaMsg)
 	if err != nil {
 		log.Printf("Failed to marshall json message")
@@ -50,7 +50,7 @@ func signalOnKafka(minioKey string) {
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
     ev := os.Getenv("TO_ZIP")
-    paths := strings.Split(ev, ":")
+    paths := strings.Split(ev, ",")
     for _, each := range paths {
         fmt.Fprintf(w, "Trying to zip %s\n", each)
         folderList := strings.Split(each, "/")
