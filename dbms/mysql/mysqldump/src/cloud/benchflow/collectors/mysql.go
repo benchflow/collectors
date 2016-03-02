@@ -65,7 +65,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     // cmdd = exec.Command("chmod", "777", "/app/backup.csv")
     // cmdd.Run()
     // cmdd.Wait()
-    
+    /*
     for _,each := range tables {
 		cmd := exec.Command("mysqldump", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), os.Getenv("MYSQL_DB_NAME"), each)
 		outfile, err := os.Create("/app/"+each+"_backup.sql")
@@ -89,6 +89,36 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	        panic(err)
 	    }
 	}
+	*/
+    
+    // Save Table sizes
+    cmd := exec.Command("mysql", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "-e", "USE "+os.Getenv("MYSQL_DB_NAME")+"; select table_schema, sum((data_length+index_length)/1024/1024)*1000000 AS Bytes from information_schema.tables group by 1;")
+    cmd2 := exec.Command("sed", "s/\\t/\",\"/g;s/^/\"/;s/$/\"/;s/\\n//g")
+    outfile, err := os.Create("/app/database_table_sizes_backup.csv")
+    // outfile, err := os.Open("/app/backup.csv")
+    if err != nil {
+        fmt.Fprintf(w, "ERROR:  %s", err)
+        panic(err)
+    }
+    cmd2.Stdin, _ = cmd.StdoutPipe()
+    cmd2.Stdout = outfile
+    err = cmd2.Start()
+    cmd.Run()
+    cmd2.Wait()
+    if err != nil {
+        fmt.Fprintf(w, "ERROR:  %s", err)
+        panic(err)
+    }
+    outfile.Close()
+    minio.GzipFile("/app/database_table_sizes_backup.csv")
+    callMinioClient("/app/database_table_sizes_backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/database_table_sizes.csv.gz")
+	//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+".csv.gz")
+	err = os.Remove("/app/database_table_sizes_backup.csv.gz")
+	if err != nil {
+        fmt.Fprintf(w, "ERROR:  %s", err)
+        panic(err)
+    }
+	
     
     // Save the tables
     for _, each := range tables {
@@ -178,7 +208,6 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 }
  
 func main() {
-
     http.HandleFunc("/data", backupHandler)
     http.ListenAndServe(":8080", nil)
 }

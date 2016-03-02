@@ -1,5 +1,5 @@
 REPONAME = collectors
-NAME = mysqldump
+NAME = mysql
 DOCKERIMAGENAME = benchflow/$(REPONAME):$(NAME)
 VERSION = dev
 GOPATH_SAVE_RESTORE:=`pwd`"/Godeps/_workspace"
@@ -51,7 +51,7 @@ build_container_local:
 test_container_local:
 	docker run -d --name db -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=stuff mysql
 	docker run -ti --rm -e "ENVCONSUL_CONSUL=$(ENVCONSUL_CONSUL)" \
-	-e "TRIAL_ID=1_1" -e "KAFKA_HOST=$(KAFKA_HOST)" -e "COLLECTOR_NAME=mysqldump" \
+	-e "TRIAL_ID=1_1" -e "KAFKA_HOST=$(KAFKA_HOST)" -e "COLLECTOR_NAME=mysql" \
 	-e "MYSQL_DB_NAME=stuff" -e "TABLE_NAMES=test" -e "MYSQL_HOST=10.0.2.15" \
 	-e "MYSQL_PORT=3306" -e "MYSQL_USER=root" -e "MYSQL_USER_PASSWORD=password" \
 	-e "CONTAINER_NAME=$(NAME)" -e "COLLECTOR_NAME=$(NAME)" -e "DATA_NAME=$(NAME)" \

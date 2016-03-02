@@ -2,7 +2,7 @@ FROM benchflow/base-images:minio-client_dev
 
 MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
-ENV COLLECTOR_NAME mysqldump
+ENV COLLECTOR_NAME mysql
 ENV COLLECTOR_VERSION v-dev
 
 #TODO: pin version of mysql-client
@@ -12,6 +12,6 @@ RUN apk --update add wget gzip mysql-client && \
     apk del --purge wget && \
     rm -rf /var/cache/apk/*
 
-COPY ./services/300-dbms-mysql-mysqldump-collector.conf /apps/chaperone.d/300-dbms-mysql-mysqldump-collector.conf
+COPY ./services/300-dbms-mysql-mysql-collector.conf /apps/chaperone.d/300-dbms-mysql-mysql-collector.conf
 
 EXPOSE 8080
