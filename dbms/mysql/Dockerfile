@@ -12,6 +12,6 @@ RUN apk --update add wget gzip mysql-client && \
     apk del --purge wget && \
     rm -rf /var/cache/apk/*
 
-COPY ./services/300-dbms-mysql-mysql-collector.conf /apps/chaperone.d/300-dbms-mysql-mysql-collector.conf
+COPY ./services/300-dbms-mysql-collector.conf /apps/chaperone.d/300-dbms-mysql-collector.conf
 
 EXPOSE 8080
