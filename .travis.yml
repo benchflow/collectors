@@ -42,7 +42,7 @@ deploy:
     secure: $GITHUB_ACCESS_TOKEN
   file: 
     - files/zip/bin/zip
-    - dbms/mysql/mysqldump/bin/mysqldump
+    - dbms/mysql/bin/mysql
     - environment/logs/bin/logs
     - environment/stats/bin/stats
   skip_cleanup: true
