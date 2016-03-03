@@ -82,8 +82,8 @@ func attachToContainer(client docker.Client, container Container) {
 func collectStats(container Container) {
 	go func() {
 		var e docker.Env
-		fo, err := os.Create("./"+container.ID+"_tmp")
-		//fo, err := os.Create("/app/"+container.ID+"_tmp")
+		//fo, err := os.Create("./"+container.ID+"_tmp")
+		fo, err := os.Create("/app/"+container.ID+"_tmp")
 		if err != nil {
 	        panic(err)
 	    }
