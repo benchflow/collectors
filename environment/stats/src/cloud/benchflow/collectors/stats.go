@@ -20,11 +20,12 @@ import (
 type Container struct {
 	ID           string
 	statsChannel chan *docker.Stats
+	doneChannel chan bool
 }
 
 var containers []Container
 var stopChannel chan bool
-var doneChannel chan bool
+//var doneChannel chan bool
 var waitGroup sync.WaitGroup
 var collecting bool
 
@@ -68,7 +69,7 @@ func attachToContainer(client docker.Client, container Container) {
 			ID:      container.ID,
 			Stats:   container.statsChannel,
 			Stream:  true,
-			Done:    doneChannel,
+			Done:    container.doneChannel,
 			Timeout: 0,
 		})
 		if err != nil {
@@ -81,6 +82,7 @@ func attachToContainer(client docker.Client, container Container) {
 func collectStats(container Container) {
 	go func() {
 		var e docker.Env
+		//fo, err := os.Create("./"+container.ID+"_tmp")
 		fo, err := os.Create("/app/"+container.ID+"_tmp")
 		if err != nil {
 	        panic(err)
@@ -88,13 +90,8 @@ func collectStats(container Container) {
 		for true {
 			select {
 			case <- stopChannel:
-				close(doneChannel)
+				close(container.doneChannel)
 				fo.Close()
-				minio.GzipFile("/app/"+container.ID+"_tmp")
-				minioKey := minio.GenerateKey(container.ID+"_stats.gz")
-				callMinioClient("/app/"+container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
-				//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
-				signalOnKafka(minioKey)
 				waitGroup.Done()
 				return
 			default:
@@ -109,7 +106,6 @@ func collectStats(container Container) {
 
 func createDockerClient() docker.Client {
 	//path := os.Getenv("DOCKER_CERT_PATH")
-	//endpoint := "tcp://"+os.Getenv("DOCKER_HOST")+":2376"
 	//endpoint := "tcp://192.168.99.100:2376"
     //ca := fmt.Sprintf("%s/ca.pem", path)
     //cert := fmt.Sprintf("%s/cert.pem", path)
@@ -133,10 +129,14 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	conts := strings.Split(contEV, ",")
 	containers = []Container{}
 	stopChannel = make(chan bool)
-	doneChannel = make(chan bool)
 	for _, each := range conts {
+		ID, err := client.InspectContainer(each)
+		if err != nil {
+			panic(err)
+			}
 		statsChannel := make(chan *docker.Stats)
-		c := Container{ID: each, statsChannel: statsChannel}
+		doneChannel := make(chan bool)
+		c := Container{ID: ID.ID, statsChannel: statsChannel, doneChannel: doneChannel}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
@@ -154,6 +154,21 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	close(stopChannel)
 	waitGroup.Wait()
 	collecting = false
+	composedMinioKey := ""
+	for _, container := range containers {
+		//minio.GzipFile("./"+container.ID+"_tmp")
+		minio.GzipFile("/app/"+container.ID+"_tmp")
+		minioKey := minio.GenerateKey(container.ID+"_stats.gz")
+		composedMinioKey = composedMinioKey+minioKey+","
+		callMinioClient("/app/"+container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
+		//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
+		err := os.Remove("/app/"+container.ID+"_tmp.gz")
+		if err != nil {
+	        panic(err)
+	    }
+	}
+	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
+	signalOnKafka(composedMinioKey)
 	fmt.Fprintf(w, "Stopped collecting")
 }
 
