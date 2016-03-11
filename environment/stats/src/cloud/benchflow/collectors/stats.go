@@ -131,13 +131,15 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	containers = []Container{}
 	stopChannel = make(chan bool)
 	for _, each := range conts {
-		ID, err := client.InspectContainer(each)
-		if err != nil {
-			panic(err)
-			}
+		//ID, err := client.InspectContainer(each)
+		//if err != nil {
+		//	panic(err)
+		//	}
+		ID := each
 		statsChannel := make(chan *docker.Stats)
 		doneChannel := make(chan bool)
-		c := Container{ID: ID.ID, statsChannel: statsChannel, doneChannel: doneChannel}
+		//c := Container{ID: ID.ID, statsChannel: statsChannel, doneChannel: doneChannel}
+		c := Container{ID: ID, statsChannel: statsChannel, doneChannel: doneChannel}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
