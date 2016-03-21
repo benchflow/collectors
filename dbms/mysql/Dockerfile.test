@@ -6,10 +6,10 @@ MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 RUN apk --update add gzip mysql-client && \
     rm -rf /var/cache/apk/*
 
-COPY ./bin/mysqldump_linux /app/mysqldump
-RUN chmod +x /app/mysqldump
+COPY ./bin/mysql_linux /app/mysql
+RUN chmod +x /app/mysql
 #TODO: change back, changed for testing purposes
-#COPY ./services/300-dbms-mysql-mysqldump-collector.conf /apps/chaperone.d/300-dbms-mysql-mysqldump-collector.conf
-CMD /app/mysqldump
+#COPY ./services/300-dbms-mysql-collector.conf /apps/chaperone.d/300-dbms-mysql-collector.conf
+CMD /app/mysql
 
 EXPOSE 8080
