@@ -4,3 +4,9 @@ Godeps/_workspace/pkg/
 dbms/mysql/benchflow_make
 
 environment/stats/benchflow_make
+environment/stats/src/github.com/
+environment/properties/src/github.com/
+files/zip/src/github.com/
+
+
+environment/properties/benchflow_make
