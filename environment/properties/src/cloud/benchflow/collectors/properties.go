@@ -116,9 +116,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		
 		fmt.Println(minioKey)
 		
-		callMinioClient("/app/"+each+"_inspect_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_inspect_tmp.gz")
-		callMinioClient("/app/"+each+"_info_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_info_tmp.gz")
-		callMinioClient("/app/"+each+"_version_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_version_tmp.gz")
+		callMinioClient("/app/"+each+"_inspect_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_inspect.gz")
+		callMinioClient("/app/"+each+"_info_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_info.gz")
+		callMinioClient("/app/"+each+"_version_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_version.gz")
 		
 		err = os.Remove("/app/"+each+"_inspect_tmp.gz")
 		if err != nil {
