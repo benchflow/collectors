@@ -72,26 +72,69 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	composedMinioKey := ""
 	for _, each := range conts {
 		var e docker.Env
-		fo, err := os.Create("/app/"+each+"_tmp")
+		
+		foInspect, err := os.Create("/app/"+each+"_inspect_tmp")
 		if err != nil {
 	        panic(err)
 	    }
-		properties, err := client.InspectContainer(each)
+		foInfo, err := os.Create("/app/"+each+"_info_tmp")
+		if err != nil {
+	        panic(err)
+	    }
+		foVersion, err := os.Create("/app/"+each+"_version_tmp")
+		if err != nil {
+	        panic(err)
+	    }
+		
+		inspect, err := client.InspectContainer(each)
 		if err != nil {
 			panic(err)
 			}
-		e.SetJSON("dat", properties)
-		fo.Write([]byte(e.Get("dat")))
-		minio.GzipFile("/app/"+each+"_tmp")
-		minioKey := minio.GenerateKey(each+"_properties.gz")
+		e.SetJSON("inspect", inspect)
+		foInspect.Write([]byte(e.Get("inspect")))
+		
+		info, err := client.Info()
+		if err != nil {
+			panic(err)
+			}
+		e.SetJSON("info", info)
+		foInfo.Write([]byte(e.Get("info")))
+		
+		version, err := client.Version()
+		if err != nil {
+			panic(err)
+			}
+		e.SetJSON("version", version)
+		foVersion.Write([]byte(e.Get("version")))
+		
+		minio.GzipFile("/app/"+each+"_inspect_tmp")
+		minio.GzipFile("/app/"+each+"_info_tmp")
+		minio.GzipFile("/app/"+each+"_version_tmp")
+		
+		minioKey := minio.GenerateKey(each)
 		composedMinioKey = composedMinioKey+minioKey+","
-		callMinioClient("/app/"+each+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
-		err = os.Remove("/app/"+each+"_tmp.gz")
+		
+		fmt.Println(minioKey)
+		
+		callMinioClient("/app/"+each+"_inspect_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_inspect_tmp.gz")
+		callMinioClient("/app/"+each+"_info_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_info_tmp.gz")
+		callMinioClient("/app/"+each+"_version_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_version_tmp.gz")
+		
+		err = os.Remove("/app/"+each+"_inspect_tmp.gz")
+		if err != nil {
+	        panic(err)
+	    }
+		err = os.Remove("/app/"+each+"_info_tmp.gz")
+		if err != nil {
+	        panic(err)
+	    }
+		err = os.Remove("/app/"+each+"_version_tmp.gz")
 		if err != nil {
 	        panic(err)
 	    }
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
+	fmt.Println(composedMinioKey)
 	signalOnKafka(composedMinioKey)
 	}
 
