@@ -1,0 +1,20 @@
+engines:
+  gofmt:
+    enabled: true
+  golint:
+    enabled: true
+  govet:
+    enabled: true
+  markdownlint:
+    enabled: true
+  shellcheck:
+    enabled: true
+
+ratings:
+  paths:
+    - "**.go"
+    - "**.sh"
+
+exclude_paths:
+- "**/Godeps/**"
+- "**.rb"
