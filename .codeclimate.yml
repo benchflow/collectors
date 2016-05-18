@@ -20,4 +20,3 @@ ratings:
 
 exclude_paths:
 - "**/Godeps/**"
-- "**.rb"
