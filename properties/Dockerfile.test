@@ -1,0 +1,13 @@
+FROM benchflow/base-images:minio-client_dev
+
+MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
+
+RUN apk --update add gzip && \
+    rm -rf /var/cache/apk/*
+
+COPY ./bin/properties_linux /app/properties
+RUN chmod +x /app/properties
+#COPY ./services/300-environment-properties-collector.conf /apps/chaperone.d/300-environment-properties-collector.conf
+CMD /app/properties
+ 
+EXPOSE 8080
