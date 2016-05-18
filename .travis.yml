@@ -45,6 +45,7 @@ deploy:
     - dbms/mysql/bin/mysql
     - environment/logs/bin/logs
     - environment/stats/bin/stats
+    - environment/stats/bin/properties
   skip_cleanup: true
   on:
     tags: false
