@@ -1,6 +1,15 @@
 bin/
-pkg/
-Godeps/_workspace/pkg/
+dbms/mysql/pkg
+dbms/mysql/Godeps/_workspace/pkg
+environment/logs/pkg
+environment/logs/Godeps/_workspace/pkg
+environment/properties/pkg
+environment/properties/Godeps/_workspace/pkg
+environment/stats/pkg
+environment/stats/Godeps/_workspace/pkg
+files/zip/pkg
+files/zip/Godeps/_workspace/pkg
+
 dbms/mysql/benchflow_make
 
 environment/stats/benchflow_make
