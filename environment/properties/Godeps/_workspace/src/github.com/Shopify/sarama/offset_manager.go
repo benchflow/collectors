@@ -345,9 +345,9 @@ func (pom *partitionOffsetManager) NextOffset() (int64, string) {
 
 	if pom.offset >= 0 {
 		return pom.offset + 1, pom.metadata
-	} else {
-		return pom.parent.conf.Consumer.Offsets.Initial, ""
 	}
+
+	return pom.parent.conf.Consumer.Offsets.Initial, ""
 }
 
 func (pom *partitionOffsetManager) AsyncClose() {
@@ -462,11 +462,19 @@ func (bom *brokerOffsetManager) flushToBroker() {
 		case ErrNoError:
 			block := request.blocks[s.topic][s.partition]
 			s.updateCommitted(block.offset, block.metadata)
-			break
-		case ErrUnknownTopicOrPartition, ErrNotLeaderForPartition, ErrLeaderNotAvailable:
+		case ErrUnknownTopicOrPartition, ErrNotLeaderForPartition, ErrLeaderNotAvailable,
+			ErrConsumerCoordinatorNotAvailable, ErrNotCoordinatorForConsumer:
+			// not a critical error, we just need to redispatch
 			delete(bom.subscriptions, s)
 			s.rebalance <- none{}
+		case ErrOffsetMetadataTooLarge, ErrInvalidCommitOffsetSize:
+			// nothing we can do about this, just tell the user and carry on
+			s.handleError(err)
+		case ErrOffsetsLoadInProgress:
+			// nothing wrong but we didn't commit, we'll get it next time round
+			break
 		default:
+			// dunno, tell the user and try redispatching
 			s.handleError(err)
 			delete(bom.subscriptions, s)
 			s.rebalance <- none{}
@@ -475,15 +483,29 @@ func (bom *brokerOffsetManager) flushToBroker() {
 }
 
 func (bom *brokerOffsetManager) constructRequest() *OffsetCommitRequest {
-	r := &OffsetCommitRequest{
-		Version:       1,
-		ConsumerGroup: bom.parent.group,
+	var r *OffsetCommitRequest
+	var perPartitionTimestamp int64
+	if bom.parent.conf.Consumer.Offsets.Retention == 0 {
+		perPartitionTimestamp = ReceiveTime
+		r = &OffsetCommitRequest{
+			Version:                 1,
+			ConsumerGroup:           bom.parent.group,
+			ConsumerGroupGeneration: GroupGenerationUndefined,
+		}
+	} else {
+		r = &OffsetCommitRequest{
+			Version:                 2,
+			RetentionTime:           int64(bom.parent.conf.Consumer.Offsets.Retention / time.Millisecond),
+			ConsumerGroup:           bom.parent.group,
+			ConsumerGroupGeneration: GroupGenerationUndefined,
+		}
+
 	}
 
 	for s := range bom.subscriptions {
 		s.lock.Lock()
 		if s.dirty {
-			r.AddBlock(s.topic, s.partition, s.offset, ReceiveTime, s.metadata)
+			r.AddBlock(s.topic, s.partition, s.offset, perPartitionTimestamp, s.metadata)
 		}
 		s.lock.Unlock()
 	}
