@@ -10,9 +10,11 @@ build_release:
 	$(MAKE) -C ./dbms/mysql
 	$(MAKE) -C ./environment/logs
 	$(MAKE) -C ./environment/stats
+	$(MAKE) -C ./environment/properties
 
 test:
 	$(MAKE) -C ./files/zip
 	$(MAKE) -C ./dbms/mysql
 	$(MAKE) -C ./environment/logs
 	$(MAKE) -C ./environment/stats
+	$(MAKE) -C ./environment/properties
