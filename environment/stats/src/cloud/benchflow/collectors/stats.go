@@ -23,7 +23,7 @@ type Container struct {
 	ID           string
 	statsChannel chan *docker.Stats
 	doneChannel chan bool
-	IsHost       bool
+	Network       string
 }
 
 var containers []Container
@@ -107,6 +107,9 @@ func collectStats(container Container) {
 func collectNetworkStats(container Container, client docker.Client) {
 	go func() {
 		foNet, err := os.Create("/app/"+container.Name+"_network_tmp")
+		if err != nil {
+	        panic(err)
+	    }
 		foTop, err := os.Create("/app/"+container.Name+"_top_tmp")
 		if err != nil {
 	        panic(err)
@@ -115,12 +118,14 @@ func collectNetworkStats(container Container, client docker.Client) {
 		if err != nil {
 	        panic(err)
 	    	}
+		var nethogsOptions []string
+		nethogsOptions = append(nethogsOptions, "-t")
 		var interfaceNames []string
-		interfaceNames = append(interfaceNames, "-t")
 		for _, each := range interfaces {
 			interfaceNames = append(interfaceNames, each.Name)
 			}
-		cmd := exec.Command("/usr/usr/local/sbin/nethogs", interfaceNames...)
+		nethogsOptions = append(nethogsOptions, interfaceNames...)
+		cmd := exec.Command("/usr/usr/local/sbin/nethogs", nethogsOptions...)
 		cmd.Stdout = foNet
 		err = cmd.Start()
 	    if err != nil {
@@ -176,10 +181,10 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	for _, each := range conts {
 		containerInspect, err := client.InspectContainer(each)
 		networks := containerInspect.NetworkSettings.Networks
-		isHost := false
+		network := "bridge"
 		for k := range networks {
 			if k == "host" {
-				isHost = true
+				network = "host"
 				}
 			}
 		ID := containerInspect.ID
@@ -188,12 +193,12 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 			}
 		statsChannel := make(chan *docker.Stats)
 		doneChannel := make(chan bool)
-		c := Container{Name: each, ID: ID, statsChannel: statsChannel, doneChannel: doneChannel, IsHost: isHost}
+		c := Container{Name: each, ID: ID, statsChannel: statsChannel, doneChannel: doneChannel, Network: network}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
 		waitGroup.Add(1)
-		if(isHost) {
+		if(network == "host") {
 			collectNetworkStats(c, client)
 			waitGroup.Add(1)
 		}
@@ -214,7 +219,7 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	composedContainerIds := ""
 	for _, container := range containers {
 		minio.GzipFile("/app/"+container.Name+"_stats_tmp")
-		if container.IsHost {
+		if container.Network == "host" {
 			minio.GzipFile("/app/"+container.Name+"_network_tmp")
 			minio.GzipFile("/app/"+container.Name+"_top_tmp")
 		}
@@ -222,7 +227,7 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+container.ID+","
 		callMinioClient("/app/"+container.ID+"_stats_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_stats.gz")
-		if container.IsHost {
+		if container.Network == "host" {
 			callMinioClient("/app/"+container.ID+"_network_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_network.gz")
 			callMinioClient("/app/"+container.ID+"_top_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_top.gz")
 		}
@@ -230,7 +235,7 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 	        panic(err)
 	    }
-		if container.IsHost {
+		if container.Network == "host" {
 			err = os.Remove("/app/"+container.ID+"_network_tmp.gz")
 			if err != nil {
 		        panic(err)
