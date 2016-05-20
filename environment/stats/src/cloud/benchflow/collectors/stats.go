@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"time"
 	"log"
 	"net/http"
 	"os"
@@ -12,15 +14,16 @@ import (
 	"github.com/fsouza/go-dockerclient"
 	"github.com/Shopify/sarama"
 	"encoding/json"
-	//"github.com/minio/minio-go"
 	"github.com/benchflow/commons/minio"
 	"strconv"
 )
 
 type Container struct {
+	Name         string
 	ID           string
 	statsChannel chan *docker.Stats
 	doneChannel chan bool
+	Network       string
 }
 
 var containers []Container
@@ -35,13 +38,14 @@ type KafkaMessage struct {
 	Minio_key string `json:"minio_key"`
 	Trial_id string `json:"trial_id"`
 	Experiment_id string `json:"experiment_id"`
+	Container_id string `json:"container_id"`
 	Total_trials_num int `json:"total_trials_num"`
 	Collector_name string `json:"collector_name"`
 	}
 
-func signalOnKafka(minioKey string) {
-	totalTrials, _ := strconv.Atoi(os.Getenv("TOTAL_TRIALS_NUM"))
-	kafkaMsg := KafkaMessage{SUT_name: os.Getenv("SUT_NAME"), SUT_version: os.Getenv("SUT_VERSION"), Minio_key: minioKey, Trial_id: os.Getenv("TRIAL_ID"), Experiment_id: os.Getenv("EXPERIMENT_ID"), Total_trials_num: totalTrials, Collector_name: os.Getenv("COLLECTOR_NAME")}
+func signalOnKafka(minioKey string, containerID string) {
+	totalTrials, _ := strconv.Atoi(os.Getenv("BENCHFLOW_TRIAL_TOTAL_NUM"))
+	kafkaMsg := KafkaMessage{SUT_name: os.Getenv("SUT_NAME"), SUT_version: os.Getenv("SUT_VERSION"), Minio_key: minioKey, Trial_id: os.Getenv("BENCHFLOW_TRIAL_ID"), Experiment_id: os.Getenv("BENCHFLOW_EXPERIMENT_ID"), Container_id: containerID, Total_trials_num: totalTrials, Collector_name: os.Getenv("BENCHFLOW_COLLECTOR_NAME")}
 	jsMessage, err := json.Marshal(kafkaMsg)
 	if err != nil {
 		log.Printf("Failed to marshall json message")
@@ -66,25 +70,20 @@ func signalOnKafka(minioKey string) {
 
 func attachToContainer(client docker.Client, container Container) {
 	go func() {
-		err := client.Stats(docker.StatsOptions{
+		_ = client.Stats(docker.StatsOptions{
 			ID:      container.ID,
 			Stats:   container.statsChannel,
 			Stream:  true,
 			Done:    container.doneChannel,
 			Timeout: 0,
 		})
-		if err != nil {
-			//log.Fatal(err)
-		}
-		//fmt.Println("Stopped collecting")
 	}()
 }
 
 func collectStats(container Container) {
 	go func() {
 		var e docker.Env
-		//fo, err := os.Create("./"+container.ID+"_tmp")
-		fo, err := os.Create("/app/"+container.ID+"_tmp")
+		fo, err := os.Create("/app/"+container.Name+"_stats_tmp")
 		if err != nil {
 	        panic(err)
 	    }
@@ -100,6 +99,55 @@ func collectStats(container Container) {
 				e.SetJSON("dat", dat)
 				fo.Write([]byte(e.Get("dat")))
 				fo.Write([]byte("\n"))
+				}
+		}
+	}()
+}
+
+func collectNetworkStats(container Container, client docker.Client) {
+	go func() {
+		foNet, err := os.Create("/app/"+container.Name+"_network_tmp")
+		if err != nil {
+	        panic(err)
+	    }
+		foTop, err := os.Create("/app/"+container.Name+"_top_tmp")
+		if err != nil {
+	        panic(err)
+	    }
+		interfaces, err := net.Interfaces()
+		if err != nil {
+	        panic(err)
+	    	}
+		var nethogsOptions []string
+		nethogsOptions = append(nethogsOptions, "-t")
+		var interfaceNames []string
+		for _, each := range interfaces {
+			interfaceNames = append(interfaceNames, each.Name)
+			}
+		nethogsOptions = append(nethogsOptions, interfaceNames...)
+		cmd := exec.Command("/usr/usr/local/sbin/nethogs", nethogsOptions...)
+		cmd.Stdout = foNet
+		err = cmd.Start()
+	    if err != nil {
+	        panic(err)
+	    	}
+		for true {
+			select {
+			default:
+				top, err := client.TopContainer(container.Name, "")
+				if err != nil {
+		        	panic(err)
+		    	}
+				var e docker.Env
+				e.SetJSON("top", top)
+				foTop.WriteString(e.Get("top")+"\n")
+				time.Sleep(750 * time.Millisecond)
+			case <- stopChannel:
+				cmd.Process.Kill()
+				foNet.Close()
+				foTop.Close()
+				waitGroup.Done()
+				return
 				}
 		}
 	}()
@@ -131,19 +179,39 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	containers = []Container{}
 	stopChannel = make(chan bool)
 	for _, each := range conts {
-		//ID, err := client.InspectContainer(each)
-		//if err != nil {
-		//	panic(err)
-		//	}
-		ID := each
+		containerInspect, err := client.InspectContainer(each)
+		networks := containerInspect.NetworkSettings.Networks
+		// Assuming bridge by default if not host
+		/*
+		Possible values of a network:
+		--net="bridge"          Connect a container to a network
+                                'bridge': create a network stack on the default Docker bridge
+                                'none': no networking
+                                'container:<name|id>': reuse another container's network stack
+                                'host': use the Docker host network stack
+                                '<network-name>|<network-id>': connect to a user-defined network
+		*/
+		network := "bridge"
+		for k := range networks {
+			if k == "host" {
+				network = "host"
+				}
+			}
+		ID := containerInspect.ID
+		if err != nil {
+			panic(err)
+			}
 		statsChannel := make(chan *docker.Stats)
 		doneChannel := make(chan bool)
-		//c := Container{ID: ID.ID, statsChannel: statsChannel, doneChannel: doneChannel}
-		c := Container{ID: ID, statsChannel: statsChannel, doneChannel: doneChannel}
+		c := Container{Name: each, ID: ID, statsChannel: statsChannel, doneChannel: doneChannel, Network: network}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
 		waitGroup.Add(1)
+		if(network == "host") {
+			collectNetworkStats(c, client)
+			waitGroup.Add(1)
+		}
 	}
 	collecting = true
 	fmt.Fprintf(w, "Started collecting")
@@ -158,20 +226,39 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	waitGroup.Wait()
 	collecting = false
 	composedMinioKey := ""
+	composedContainerIds := ""
 	for _, container := range containers {
-		//minio.GzipFile("./"+container.ID+"_tmp")
-		minio.GzipFile("/app/"+container.ID+"_tmp")
-		minioKey := minio.GenerateKey(container.ID+"_stats.gz")
+		minio.GzipFile("/app/"+container.Name+"_stats_tmp")
+		if container.Network == "host" {
+			minio.GzipFile("/app/"+container.Name+"_network_tmp")
+			minio.GzipFile("/app/"+container.Name+"_top_tmp")
+		}
+		minioKey := minio.GenerateKey(container.Name)
 		composedMinioKey = composedMinioKey+minioKey+","
-		callMinioClient("/app/"+container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
-		//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
-		err := os.Remove("/app/"+container.ID+"_tmp.gz")
+		composedContainerIds = composedContainerIds+container.ID+","
+		callMinioClient("/app/"+container.ID+"_stats_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_stats.gz")
+		if container.Network == "host" {
+			callMinioClient("/app/"+container.ID+"_network_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_network.gz")
+			callMinioClient("/app/"+container.ID+"_top_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_top.gz")
+		}
+		err := os.Remove("/app/"+container.ID+"_stats_tmp.gz")
 		if err != nil {
 	        panic(err)
 	    }
+		if container.Network == "host" {
+			err = os.Remove("/app/"+container.ID+"_network_tmp.gz")
+			if err != nil {
+		        panic(err)
+		    }
+			err = os.Remove("/app/"+container.ID+"_top_tmp.gz")
+			if err != nil {
+		        panic(err)
+		    }
+		}
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
-	signalOnKafka(composedMinioKey)
+	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
+	signalOnKafka(composedMinioKey, composedContainerIds)
 	fmt.Fprintf(w, "Stopped collecting")
 }
 

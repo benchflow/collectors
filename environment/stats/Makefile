@@ -31,31 +31,40 @@ clean:
 	rm -rf Godeps/_workspace/pkg
 
 build:
-	godep go build -o bin/$(NAME) -v ./...
+	godep go build -o bin/$(NAME) -v ./src/cloud/benchflow/collectors/stats.go
 
 build_release:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME) -v ./...
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME) -v ./src/cloud/benchflow/collectors/stats.go
 
 install:
-	godep go install -v ./...
+	godep go install -v ./src/cloud/benchflow/collectors/stats.go
 	mv bin/$(REPONAME) bin/$(NAME)
 
 test:
-	godep go test ./...
+	godep go test ./src/cloud/benchflow/collectors/stats.go
 
 build_container_local:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME)_linux -v ./...
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME)_linux -v ./src/cloud/benchflow/collectors/stats.go
 	docker build -t $(DOCKERIMAGENAME)_$(VERSION) -f Dockerfile.test .
 	rm bin/$(NAME)_linux
 
 test_container_local:
 	docker run -d -e "MYSQL_ALLOW_EMPTY_PASSWORD=true" --name db mysql 
 	docker run -d -e "CONTAINERS=db" -e "ENVCONSUL_CONSUL=$(ENVCONSUL_CONSUL)" \
-	-e "TRIAL_ID=1_1" -e "KAFKA_HOST=$(KAFKA_HOST)" \
-	-e "CONTAINER_NAME=$(NAME)" -e "COLLECTOR_NAME=$(NAME)" -e "DATA_NAME=$(NAME)" \
+	-e "BENCHFLOW_TRIAL_ID=1_1" -e "KAFKA_HOST=$(KAFKA_HOST)" \
+	-e "BENCHFLOW_CONTAINER_NAME=$(NAME)" -e "BENCHFLOW_COLLECTOR_NAME=$(NAME)" -e "BENCHFLOW_DATA_NAME=$(NAME)" \
 	-e "MINIO_ALIAS=benchflow" -e "MINIO_HOST=$(MINIO_HOST)" -e "MINIO_ACCESSKEYID=$(MINIO_ACCESSKEYID)" \
 	-e "MINIO_SECRETACCESSKEY=$(MINIO_SECRETACCESSKEY)" \
 	-p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock:ro --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
+	
+test_container_local_net_host:
+	docker run -d -e "MYSQL_ALLOW_EMPTY_PASSWORD=true" --net=host --name db mysql 
+	docker run -d -e "CONTAINERS=db" -e "ENVCONSUL_CONSUL=$(ENVCONSUL_CONSUL)" \
+	-e "BENCHFLOW_TRIAL_ID=1_1" -e "KAFKA_HOST=$(KAFKA_HOST)" \
+	-e "BENCHFLOW_CONTAINER_NAME=$(NAME)" -e "BENCHFLOW_COLLECTOR_NAME=$(NAME)" -e "BENCHFLOW_DATA_NAME=$(NAME)" \
+	-e "MINIO_ALIAS=benchflow" -e "MINIO_HOST=$(MINIO_HOST)" -e "MINIO_ACCESSKEYID=$(MINIO_ACCESSKEYID)" \
+	-e "MINIO_SECRETACCESSKEY=$(MINIO_SECRETACCESSKEY)" \
+	-p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock:ro --net=host --pid=host --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
 
 rm_container_local:
 	docker rm -f -v db

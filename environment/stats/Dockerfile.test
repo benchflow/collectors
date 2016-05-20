@@ -2,7 +2,10 @@ FROM benchflow/base-images:minio-client_dev
 
 MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
-RUN apk --update add gzip && \
+RUN echo "@testing http://dl-4.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+RUN echo "http://dl-4.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
+
+RUN apk --update add gzip libpcap libstdc++ libgcc ncurses-terminfo-base ncurses-terminfo ncurses-libs nethogs@testing && \
     rm -rf /var/cache/apk/*
 
 COPY ./bin/stats_linux /app/stats
