@@ -181,6 +181,7 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	for _, each := range conts {
 		containerInspect, err := client.InspectContainer(each)
 		networks := containerInspect.NetworkSettings.Networks
+		// Assuming bridge by default if not host
 		network := "bridge"
 		for k := range networks {
 			if k == "host" {
