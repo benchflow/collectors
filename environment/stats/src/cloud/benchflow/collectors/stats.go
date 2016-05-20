@@ -182,6 +182,15 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 		containerInspect, err := client.InspectContainer(each)
 		networks := containerInspect.NetworkSettings.Networks
 		// Assuming bridge by default if not host
+		/*
+		Possible values of a network:
+		--net="bridge"          Connect a container to a network
+                                'bridge': create a network stack on the default Docker bridge
+                                'none': no networking
+                                'container:<name|id>': reuse another container's network stack
+                                'host': use the Docker host network stack
+                                '<network-name>|<network-id>': connect to a user-defined network
+		*/
 		network := "bridge"
 		for k := range networks {
 			if k == "host" {
