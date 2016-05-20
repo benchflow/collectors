@@ -14,7 +14,7 @@ import (
 	"github.com/fsouza/go-dockerclient"
 	"github.com/Shopify/sarama"
 	"encoding/json"
-	//"github.com/benchflow/commons/minio"
+	"github.com/benchflow/commons/minio"
 	"strconv"
 )
 
