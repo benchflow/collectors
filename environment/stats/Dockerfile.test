@@ -1,6 +1,4 @@
-#FROM benchflow/base-images:minio-client_dev
-#FROM chapdev/chaperone-alpinebase:1.0.13-U14
-FROM alpine
+FROM benchflow/base-images:minio-client_dev
 
 MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
