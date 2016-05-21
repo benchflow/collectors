@@ -5,9 +5,9 @@ MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 RUN apk --update add gzip && \
     rm -rf /var/cache/apk/*
 
-COPY ./bin/faban /app/faban
+COPY ./bin/faban_linux /app/faban
 RUN chmod +x /app/faban
-#COPY ./services/300-files-faban-collector.conf /apps/chaperone.d/300-files-faban-collector.conf
+COPY ./services/300-files-faban-collector.conf /apps/chaperone.d/300-files-faban-collector.conf
 CMD /app/faban
  
 EXPOSE 8080

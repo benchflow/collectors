@@ -44,14 +44,18 @@ test:
 	godep go test ./...
 
 build_container_local:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -v ./...
-	godep go install -v ./...
-	mv bin/$(REPONAME) bin/$(NAME)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME)_linux -v ./...
 	docker build -t $(DOCKERIMAGENAME)_$(VERSION) -f Dockerfile.test .
-	rm bin/$(NAME)
+	rm bin/$(NAME)_linux
 	
 test_container_local:
-	#TODO
+	docker run -d -e "MYSQL_ALLOW_EMPTY_PASSWORD=true" --name db mysql 
+	docker run -d -e "CONTAINERS=db" -e "ENVCONSUL_CONSUL=$(ENVCONSUL_CONSUL)" \
+	-e "BENCHFLOW_TRIAL_ID=1_1" -e "KAFKA_HOST=$(KAFKA_HOST)" \
+	-e "BENCHFLOW_CONTAINER_NAME=$(NAME)" -e "BENCHFLOW_COLLECTOR_NAME=$(NAME)" -e "BENCHFLOW_DATA_NAME=$(NAME)" \
+	-e "MINIO_ALIAS=benchflow" -e "MINIO_HOST=$(MINIO_HOST)" -e "MINIO_ACCESSKEYID=$(MINIO_ACCESSKEYID)" \
+	-e "MINIO_SECRETACCESSKEY=$(MINIO_SECRETACCESSKEY)" \
+	-p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock:ro --name $(NAME) $(DOCKERIMAGENAME)_$(VERSION)
 
 build_and_test_container_local: build_container_local test_container_local
 	
