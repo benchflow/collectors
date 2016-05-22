@@ -14,6 +14,8 @@ import (
     "strconv"
 )
 
+var fabanOutputRoot string = "/app/faban/output/"
+
 type KafkaMessage struct {
 	SUT_name string `json:"SUT_name"`
 	SUT_version string `json:"SUT_version"`
@@ -52,7 +54,7 @@ func signalOnKafka(minioKey string, containerID string) {
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
     fabanPath := r.FormValue("path")
-    path := "/app/faban/output/"+fabanPath+"/"
+    path := fabanOutputRoot+fabanPath+"/"
     files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal(err)
