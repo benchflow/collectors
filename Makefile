@@ -7,6 +7,7 @@ all: build_release
 
 build_release:
 	$(MAKE) -C ./files/zip
+	$(MAKE) -C ./files/faban
 	$(MAKE) -C ./dbms/mysql
 	$(MAKE) -C ./environment/logs
 	$(MAKE) -C ./environment/stats
@@ -14,6 +15,7 @@ build_release:
 
 test:
 	$(MAKE) -C ./files/zip
+	$(MAKE) -C ./files/faban
 	$(MAKE) -C ./dbms/mysql
 	$(MAKE) -C ./environment/logs
 	$(MAKE) -C ./environment/stats
