@@ -14,7 +14,7 @@ import (
     "strconv"
 )
 
-var fabanOutputRoot string = "/app/faban/output/"
+var fabanOutputRoot = "/app/faban/output/"
 
 type KafkaMessage struct {
 	SUT_name string `json:"SUT_name"`
@@ -53,8 +53,8 @@ func signalOnKafka(minioKey string, containerID string) {
 	}
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-    fabanPath := r.FormValue("path")
-    path := fabanOutputRoot+fabanPath+"/"
+    fabanRunId := r.FormValue("faban_run_id")
+    path := fabanOutputRoot+fabanRunId+"/"
     files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal(err)
@@ -69,7 +69,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 		} 
-	minioKey := minio.GenerateKey("faban")
+	minioKey := minio.GenerateKey(fabanRunId)
     for _, each := range files { 
 		callMinioClient(path+"/"+each.Name()+".gz", os.Getenv("MINIO_ALIAS"), minioKey+"/"+each.Name()+".gz")
 	}
