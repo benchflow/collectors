@@ -51,8 +51,8 @@ func signalOnKafka(minioKey string, containerID string) {
 	}
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-    query := r.FormValue("path")
-    path := query
+    fabanPath := r.FormValue("path")
+    path := "/app/faban/output/"+fabanPath
     files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal(err)
