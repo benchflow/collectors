@@ -67,9 +67,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 		} 
-	minioKey := minio.GenerateKey(path)
+	minioKey := minio.GenerateKey("faban")
     for _, each := range files { 
-		callMinioClient(path+"/"+each.Name()+".gz", os.Getenv("MINIO_ALIAS"), minioKey+each.Name()+".gz")
+		callMinioClient(path+"/"+each.Name()+".gz", os.Getenv("MINIO_ALIAS"), minioKey+"/"+each.Name()+".gz")
 	}
     signalOnKafka(minioKey, "faban")
 	fmt.Fprintf(w, "SUCCESS")
