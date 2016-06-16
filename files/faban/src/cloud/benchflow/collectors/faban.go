@@ -33,7 +33,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	minioKey := minio.GenerateKey(fabanRunId, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))
     for _, each := range files { 
 		//callMinioClient(path+"/"+each.Name()+".gz", os.Getenv("MINIO_ALIAS"), minioKey+"/"+each.Name()+".gz")
-		minio.SendGzipToMinio(path+"/"+each.Name()+".gz", os.Getenv("MINIO_HOST"), minioKey+"/"+each.Name()+".gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+		minio.SendGzipToMinio(path+"/"+each.Name()+".gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"/"+each.Name()+".gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 	}
     //kafka.SignalOnKafka(minioKey, "faban")
     kafka.SignalOnKafka(minioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "faban", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
