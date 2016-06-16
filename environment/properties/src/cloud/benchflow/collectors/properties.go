@@ -77,11 +77,11 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(minioKey)
 		
 		//callMinioClient("/app/"+each+"_inspect_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_inspect.gz")
-		minio.SendGzipToMinio("/app/"+each+"_inspect_tmp.gz", os.Getenv("MINIO_HOST"), minioKey+"_inspect.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+		minio.SendGzipToMinio("/app/"+each+"_inspect_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_inspect.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		//callMinioClient("/app/"+each+"_info_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_info.gz")
-		minio.SendGzipToMinio("/app/"+each+"_info_tmp.gz", os.Getenv("MINIO_HOST"), minioKey+"_info.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+		minio.SendGzipToMinio("/app/"+each+"_info_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_info.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		//callMinioClient("/app/"+each+"_version_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_version.gz")
-		minio.SendGzipToMinio("/app/"+each+"_version_tmp.gz", os.Getenv("MINIO_HOST"), minioKey+"_version.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+		minio.SendGzipToMinio("/app/"+each+"_version_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_version.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		
 		err = os.Remove("/app/"+each+"_inspect_tmp.gz")
 		if err != nil {
