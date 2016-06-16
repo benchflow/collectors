@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,986 +17,649 @@
 package minio
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
-	"path/filepath"
+	"os"
+	"regexp"
 	"runtime"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-// API - Cloud Storage API interface
-type API interface {
-	// Bucket Read/Write/Stat operations
-	BucketAPI
+// Client implements Amazon S3 compatible methods.
+type Client struct {
+	///  Standard options.
 
-	// Object Read/Write/Stat operations
-	ObjectAPI
+	// AccessKeyID required for authorized requests.
+	accessKeyID string
+	// SecretAccessKey required for authorized requests.
+	secretAccessKey string
+	// Choose a signature type if necessary.
+	signature SignatureType
+	// Set to 'true' if Client has no access and secret keys.
+	anonymous bool
 
-	// Presigned API
-	PresignedAPI
-}
-
-// BucketAPI - bucket specific Read/Write/Stat interface
-type BucketAPI interface {
-	MakeBucket(bucket string, cannedACL BucketACL) error
-	BucketExists(bucket string) error
-	RemoveBucket(bucket string) error
-	SetBucketACL(bucket string, cannedACL BucketACL) error
-	GetBucketACL(bucket string) (BucketACL, error)
-
-	ListBuckets() <-chan BucketStatCh
-	ListObjects(bucket, prefix string, recursive bool) <-chan ObjectStatCh
-
-	// Drop all incomplete uploads
-	DropAllIncompleteUploads(bucket string) <-chan error
-}
-
-// ObjectAPI - object specific Read/Write/Stat interface
-type ObjectAPI interface {
-	GetObject(bucket, object string) (io.ReadCloser, ObjectStat, error)
-	GetPartialObject(bucket, object string, offset, length int64) (io.ReadCloser, ObjectStat, error)
-	PutObject(bucket, object, contentType string, size int64, data io.Reader) error
-	StatObject(bucket, object string) (ObjectStat, error)
-	RemoveObject(bucket, object string) error
-
-	// Drop all incomplete uploads for a given object
-	DropIncompleteUpload(bucket, object string) <-chan error
-}
-
-// PresignedAPI - object specific for now
-type PresignedAPI interface {
-	PresignedGetObject(bucket, object string, expires time.Duration) (string, error)
-}
-
-// BucketStatCh - bucket metadata over read channel
-type BucketStatCh struct {
-	Stat BucketStat
-	Err  error
-}
-
-// ObjectStatCh - object metadata over read channel
-type ObjectStatCh struct {
-	Stat ObjectStat
-	Err  error
-}
-
-// BucketStat container for bucket metadata
-type BucketStat struct {
-	// The name of the bucket.
-	Name string
-	// Date the bucket was created.
-	CreationDate time.Time
-}
-
-// ObjectStat container for object metadata
-type ObjectStat struct {
-	ETag         string
-	Key          string
-	LastModified time.Time
-	Size         int64
-	ContentType  string
-
-	Owner struct {
-		DisplayName string
-		ID          string
+	// User supplied.
+	appInfo struct {
+		appName    string
+		appVersion string
 	}
+	endpointURL *url.URL
 
-	// The class of storage used to store the object.
-	StorageClass string
+	// Needs allocation.
+	httpClient     *http.Client
+	bucketLocCache *bucketLocationCache
+
+	// Advanced functionality.
+	isTraceEnabled bool
+	traceOutput    io.Writer
+
+	// Random seed.
+	random *rand.Rand
 }
 
-// Regions s3 region map used by bucket location constraint
-var regions = map[string]string{
-	"s3-fips-us-gov-west-1.amazonaws.com": "us-gov-west-1",
-	"s3.amazonaws.com":                    "us-east-1",
-	"s3-external-1.amazonaws.com":         "us-east-1",
-	"s3-us-west-1.amazonaws.com":          "us-west-1",
-	"s3-us-west-2.amazonaws.com":          "us-west-2",
-	"s3-eu-west-1.amazonaws.com":          "eu-west-1",
-	"s3-eu-central-1.amazonaws.com":       "eu-central-1",
-	"s3-ap-southeast-1.amazonaws.com":     "ap-southeast-1",
-	"s3-ap-southeast-2.amazonaws.com":     "ap-southeast-2",
-	"s3-ap-northeast-1.amazonaws.com":     "ap-northeast-1",
-	"s3-sa-east-1.amazonaws.com":          "sa-east-1",
-	"s3.cn-north-1.amazonaws.com.cn":      "cn-north-1",
-}
-
-// getRegion returns a region based on its endpoint mapping.
-func getRegion(host string) (region string) {
-	if _, ok := regions[host]; ok {
-		return regions[host]
-	}
-	// Region cannot be empty according to Amazon S3.
-	// So we address all the four quadrants of our galaxy.
-	return "milkyway"
-}
-
-// Config - main configuration struct used by all to set endpoint, credentials, and other options for requests.
-type Config struct {
-	// Standard options
-	AccessKeyID     string
-	SecretAccessKey string
-	Endpoint        string
-
-	// Advanced options
-	// Specify this to get server response in non XML style if server supports it
-	AcceptType string
-	// Optional field. If empty, region is determined automatically.
-	Region string
-
-	// Expert options
-	//
-	// Set this to override default transport ``http.DefaultTransport``
-	//
-	// This transport is usually needed for debugging OR to add your own
-	// custom TLS certificates on the client transport, for custom CA's and
-	// certs which are not part of standard certificate authority
-	//
-	// For example :-
-	//
-	//  tr := &http.Transport{
-	//          TLSClientConfig:    &tls.Config{RootCAs: pool},
-	//          DisableCompression: true,
-	//  }
-	//
-	Transport http.RoundTripper
-
-	// internal
-	// use SetUserAgent append to default, useful when minio-go is used with in your application
-	userAgent      string
-	isUserAgentSet bool // allow user agent's to be set only once
-	isVirtualStyle bool // set when virtual hostnames are on
-}
-
-// Global constants
+// Global constants.
 const (
-	LibraryName    = "minio-go"
-	LibraryVersion = "0.2.5"
+	libraryName    = "minio-go"
+	libraryVersion = "1.0.1"
 )
 
-// SetUserAgent - append to a default user agent
-func (c *Config) SetUserAgent(name string, version string, comments ...string) {
-	if c.isUserAgentSet {
-		// if user agent already set do not set it
+// User Agent should always following the below style.
+// Please open an issue to discuss any new changes here.
+//
+//       Minio (OS; ARCH) LIB/VER APP/VER
+const (
+	libraryUserAgentPrefix = "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
+	libraryUserAgent       = libraryUserAgentPrefix + libraryName + "/" + libraryVersion
+)
+
+// NewV2 - instantiate minio client with Amazon S3 signature version
+// '2' compatibility.
+func NewV2(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
+	if err != nil {
+		return nil, err
+	}
+	// Set to use signature version '2'.
+	clnt.signature = SignatureV2
+	return clnt, nil
+}
+
+// NewV4 - instantiate minio client with Amazon S3 signature version
+// '4' compatibility.
+func NewV4(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
+	if err != nil {
+		return nil, err
+	}
+	// Set to use signature version '4'.
+	clnt.signature = SignatureV4
+	return clnt, nil
+}
+
+// New - instantiate minio client Client, adds automatic verification
+// of signature.
+func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
+	if err != nil {
+		return nil, err
+	}
+	// Google cloud storage should be set to signature V2, force it if
+	// not.
+	if isGoogleEndpoint(clnt.endpointURL) {
+		clnt.signature = SignatureV2
+	}
+	// If Amazon S3 set to signature v2.n
+	if isAmazonEndpoint(clnt.endpointURL) {
+		clnt.signature = SignatureV4
+	}
+	return clnt, nil
+}
+
+// lockedRandSource provides protected rand source, implements rand.Source interface.
+type lockedRandSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+// Int63 returns a non-negative pseudo-random 63-bit integer as an
+// int64.
+func (r *lockedRandSource) Int63() (n int64) {
+	r.lk.Lock()
+	n = r.src.Int63()
+	r.lk.Unlock()
+	return
+}
+
+// Seed uses the provided seed value to initialize the generator to a
+// deterministic state.
+func (r *lockedRandSource) Seed(seed int64) {
+	r.lk.Lock()
+	r.src.Seed(seed)
+	r.lk.Unlock()
+}
+
+func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+	// construct endpoint.
+	endpointURL, err := getEndpointURL(endpoint, secure)
+	if err != nil {
+		return nil, err
+	}
+
+	// instantiate new Client.
+	clnt := new(Client)
+	clnt.accessKeyID = accessKeyID
+	clnt.secretAccessKey = secretAccessKey
+	if clnt.accessKeyID == "" || clnt.secretAccessKey == "" {
+		clnt.anonymous = true
+	}
+
+	// Save endpoint URL, user agent for future uses.
+	clnt.endpointURL = endpointURL
+
+	// Instantiate http client and bucket location cache.
+	clnt.httpClient = &http.Client{
+		Transport: http.DefaultTransport,
+	}
+
+	// Instantiae bucket location cache.
+	clnt.bucketLocCache = newBucketLocationCache()
+
+	// Introduce a new locked random seed.
+	clnt.random = rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())})
+
+	// Return.
+	return clnt, nil
+}
+
+// SetAppInfo - add application details to user agent.
+func (c *Client) SetAppInfo(appName string, appVersion string) {
+	// if app name and version is not set, we do not a new user
+	// agent.
+	if appName != "" && appVersion != "" {
+		c.appInfo = struct {
+			appName    string
+			appVersion string
+		}{}
+		c.appInfo.appName = appName
+		c.appInfo.appVersion = appVersion
+	}
+}
+
+// SetCustomTransport - set new custom transport.
+func (c *Client) SetCustomTransport(customHTTPTransport http.RoundTripper) {
+	// Set this to override default transport
+	// ``http.DefaultTransport``.
+	//
+	// This transport is usually needed for debugging OR to add your
+	// own custom TLS certificates on the client transport, for custom
+	// CA's and certs which are not part of standard certificate
+	// authority follow this example :-
+	//
+	//   tr := &http.Transport{
+	//           TLSClientConfig:    &tls.Config{RootCAs: pool},
+	//           DisableCompression: true,
+	//   }
+	//   api.SetTransport(tr)
+	//
+	if c.httpClient != nil {
+		c.httpClient.Transport = customHTTPTransport
+	}
+}
+
+// TraceOn - enable HTTP tracing.
+func (c *Client) TraceOn(outputStream io.Writer) {
+	// if outputStream is nil then default to os.Stdout.
+	if outputStream == nil {
+		outputStream = os.Stdout
+	}
+	// Sets a new output stream.
+	c.traceOutput = outputStream
+
+	// Enable tracing.
+	c.isTraceEnabled = true
+}
+
+// TraceOff - disable HTTP tracing.
+func (c *Client) TraceOff() {
+	// Disable tracing.
+	c.isTraceEnabled = false
+}
+
+// requestMetadata - is container for all the values to make a
+// request.
+type requestMetadata struct {
+	// If set newRequest presigns the URL.
+	presignURL bool
+
+	// User supplied.
+	bucketName   string
+	objectName   string
+	queryValues  url.Values
+	customHeader http.Header
+	expires      int64
+
+	// Generated by our internal code.
+	bucketLocation     string
+	contentBody        io.Reader
+	contentLength      int64
+	contentSHA256Bytes []byte
+	contentMD5Bytes    []byte
+}
+
+// Filter out signature value from Authorization header.
+func (c Client) filterSignature(req *http.Request) {
+	// For anonymous requests, no need to filter.
+	if c.anonymous {
 		return
 	}
-	// if no name and version is set we do not add new user agents
-	if name != "" && version != "" {
-		c.userAgent = c.userAgent + " " + name + "/" + version + " (" + strings.Join(comments, "; ") + ") "
-		c.isUserAgentSet = true
-	}
-}
-
-type api struct {
-	apiCore
-}
-
-// New - instantiate a new minio api client
-func New(config Config) (API, error) {
-	if strings.TrimSpace(config.Region) == "" || len(config.Region) == 0 {
-		u, err := url.Parse(config.Endpoint)
-		if err != nil {
-			return api{}, err
-		}
-		match, _ := filepath.Match("*.s3*.amazonaws.com", u.Host)
-		if match {
-			config.isVirtualStyle = true
-			hostSplits := strings.SplitN(u.Host, ".", 2)
-			u.Host = hostSplits[1]
-		}
-		config.Region = getRegion(u.Host)
-	}
-	config.SetUserAgent(LibraryName, LibraryVersion, runtime.GOOS, runtime.GOARCH)
-	config.isUserAgentSet = false // default
-	return api{apiCore{&config}}, nil
-}
-
-/// Object operations
-
-/// Expires maximum is 7days - ie. 604800 and minimum is 1
-
-// PresignedGetObject get a presigned URL to retrieve an object for third party apps
-func (a api) PresignedGetObject(bucket, object string, expires time.Duration) (string, error) {
-	expireSeconds := int64(expires / time.Second)
-	if expireSeconds < 1 || expireSeconds > 604800 {
-		return "", invalidArgumentError("")
-	}
-	return a.presignedGetObject(bucket, object, expireSeconds, 0, 0)
-}
-
-// GetObject retrieve object
-
-// Downloads full object with no ranges, if you need ranges use GetPartialObject
-func (a api) GetObject(bucket, object string) (io.ReadCloser, ObjectStat, error) {
-	if err := invalidBucketError(bucket); err != nil {
-		return nil, ObjectStat{}, err
-	}
-	if err := invalidObjectError(object); err != nil {
-		return nil, ObjectStat{}, err
-	}
-	// get object
-	return a.getObject(bucket, object, 0, 0)
-}
-
-// GetPartialObject retrieve partial object
-//
-// Takes range arguments to download the specified range bytes of an object.
-// Setting offset and length = 0 will download the full object.
-// For more information about the HTTP Range header, go to http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35.
-func (a api) GetPartialObject(bucket, object string, offset, length int64) (io.ReadCloser, ObjectStat, error) {
-	if err := invalidBucketError(bucket); err != nil {
-		return nil, ObjectStat{}, err
-	}
-	if err := invalidObjectError(object); err != nil {
-		return nil, ObjectStat{}, err
-	}
-	// get partial object
-	return a.getObject(bucket, object, offset, length)
-}
-
-// completedParts is a wrapper to make parts sortable by their part number
-// multi part completion requires list of multi parts to be sorted
-type completedParts []completePart
-
-func (a completedParts) Len() int           { return len(a) }
-func (a completedParts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].PartNumber }
-
-// minimumPartSize minimum part size per object after which PutObject behaves internally as multipart
-var minimumPartSize int64 = 1024 * 1024 * 5
-
-// maxParts - unexported right now
-var maxParts = int64(10000)
-
-// maxPartSize - unexported right now
-var maxPartSize int64 = 1024 * 1024 * 1024 * 5
-
-// maxConcurrentQueue - max concurrent upload queue
-var maxConcurrentQueue int64 = 4
-
-// calculatePartSize - calculate the optimal part size for the given objectSize
-//
-// NOTE: Assumption here is that for any given object upload to a S3 compatible object
-// storage it will have the following parameters as constants
-//
-//  maxParts
-//  maximumPartSize
-//  minimumPartSize
-//
-// if a the partSize after division with maxParts is greater than minimumPartSize
-// then choose that to be the new part size, if not return MinimumPartSize
-//
-// special case where it happens to be that partSize is indeed bigger than the
-// maximum part size just return maxPartSize back
-func calculatePartSize(objectSize int64) int64 {
-	// make sure last part has enough buffer and handle this poperly
-	partSize := (objectSize / (maxParts - 1))
-	if partSize > minimumPartSize {
-		if partSize > maxPartSize {
-			return maxPartSize
-		}
-		return partSize
-	}
-	return minimumPartSize
-}
-
-func (a api) newObjectUpload(bucket, object, contentType string, size int64, data io.Reader) error {
-	initMultipartUploadResult, err := a.initiateMultipartUpload(bucket, object)
-	if err != nil {
-		return err
-	}
-	uploadID := initMultipartUploadResult.UploadID
-	complMultipartUpload := completeMultipartUpload{}
-	var totalLength int64
-
-	// Calculate optimal part size for a given size
-	partSize := calculatePartSize(size)
-	// Allocate bufferred error channel for maximum parts
-	errCh := make(chan error, maxParts)
-	// Limit multi part queue size to concurrent
-	mpQueueCh := make(chan struct{}, maxConcurrentQueue)
-	defer close(errCh)
-	defer close(mpQueueCh)
-	// Allocate a new wait group
-	wg := new(sync.WaitGroup)
-
-	for p := range chopper(data, partSize, nil) {
-		// This check is primarily for last part
-		// This verifies if the part.Len was an unexpected read i.e if we lost few bytes
-		if p.Len < partSize {
-			expectedPartLen := size - totalLength
-			if expectedPartLen != p.Len {
-				return ErrorResponse{
-					Code:     "UnexpectedShortRead",
-					Message:  "Data read ‘" + strconv.FormatInt(expectedPartLen, 10) + "’ is not equal to expected size ‘" + strconv.FormatInt(p.Len, 10) + "’",
-					Resource: separator + bucket + separator + object,
-				}
-			}
-		}
-		// Limit to 4 parts a given time
-		mpQueueCh <- struct{}{}
-		// Account for all parts uploaded simultaneousy
-		wg.Add(1)
-		go func(errCh chan<- error, mpQueueCh <-chan struct{}, p part) {
-			defer wg.Done()
-			defer func() {
-				<-mpQueueCh
-			}()
-			if p.Err != nil {
-				errCh <- p.Err
-				return
-			}
-			var complPart completePart
-			complPart, err = a.uploadPart(bucket, object, uploadID, p.MD5Sum, p.Num, p.Len, p.ReadSeeker)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			complMultipartUpload.Parts = append(complMultipartUpload.Parts, complPart)
-			errCh <- nil
-		}(errCh, mpQueueCh, p)
-		totalLength += p.Len
-	}
-	wg.Wait()
-	if err := <-errCh; err != nil {
-		return err
-	}
-	sort.Sort(completedParts(complMultipartUpload.Parts))
-	_, err = a.completeMultipartUpload(bucket, object, uploadID, complMultipartUpload)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type partCh struct {
-	Metadata partMetadata
-	Err      error
-}
-
-func (a api) listObjectPartsRecursive(bucket, object, uploadID string) <-chan partCh {
-	partCh := make(chan partCh, 1000)
-	go a.listObjectPartsRecursiveInRoutine(bucket, object, uploadID, partCh)
-	return partCh
-}
-
-func (a api) listObjectPartsRecursiveInRoutine(bucket, object, uploadID string, ch chan partCh) {
-	defer close(ch)
-	listObjPartsResult, err := a.listObjectParts(bucket, object, uploadID, 0, 1000)
-	if err != nil {
-		ch <- partCh{
-			Metadata: partMetadata{},
-			Err:      err,
-		}
+	// Handle if Signature V2.
+	if c.signature.isV2() {
+		// Set a temporary redacted auth
+		req.Header.Set("Authorization", "AWS **REDACTED**:**REDACTED**")
 		return
 	}
-	for _, uploadedPart := range listObjPartsResult.Parts {
-		ch <- partCh{
-			Metadata: uploadedPart,
-			Err:      nil,
-		}
-	}
-	for {
-		if !listObjPartsResult.IsTruncated {
-			break
-		}
-		listObjPartsResult, err = a.listObjectParts(bucket, object, uploadID, listObjPartsResult.NextPartNumberMarker, 1000)
-		if err != nil {
-			ch <- partCh{
-				Metadata: partMetadata{},
-				Err:      err,
-			}
-			return
-		}
-		for _, uploadedPart := range listObjPartsResult.Parts {
-			ch <- partCh{
-				Metadata: uploadedPart,
-				Err:      nil,
-			}
-		}
-	}
+
+	/// Signature V4 authorization header.
+
+	// Save the original auth.
+	origAuth := req.Header.Get("Authorization")
+	// Strip out accessKeyID from:
+	// Credential=<access-key-id>/<date>/<aws-region>/<aws-service>/aws4_request
+	regCred := regexp.MustCompile("Credential=([A-Z0-9]+)/")
+	newAuth := regCred.ReplaceAllString(origAuth, "Credential=**REDACTED**/")
+
+	// Strip out 256-bit signature from: Signature=<256-bit signature>
+	regSign := regexp.MustCompile("Signature=([[0-9a-f]+)")
+	newAuth = regSign.ReplaceAllString(newAuth, "Signature=**REDACTED**")
+
+	// Set a temporary redacted auth
+	req.Header.Set("Authorization", newAuth)
+	return
 }
 
-func (a api) continueObjectUpload(bucket, object, uploadID string, size int64, data io.Reader) error {
-	var skipParts []skipPart
-	completeMultipartUpload := completeMultipartUpload{}
-	var totalLength int64
-	for part := range a.listObjectPartsRecursive(bucket, object, uploadID) {
-		if part.Err != nil {
-			return part.Err
-		}
-		var completedPart completePart
-		completedPart.PartNumber = part.Metadata.PartNumber
-		completedPart.ETag = part.Metadata.ETag
-		completeMultipartUpload.Parts = append(completeMultipartUpload.Parts, completedPart)
-		md5SumBytes, err := hex.DecodeString(strings.Trim(part.Metadata.ETag, "\"")) // trim off the odd double quotes
+// dumpHTTP - dump HTTP request and response.
+func (c Client) dumpHTTP(req *http.Request, resp *http.Response) error {
+	// Starts http dump.
+	_, err := fmt.Fprintln(c.traceOutput, "---------START-HTTP---------")
+	if err != nil {
+		return err
+	}
+
+	// Filter out Signature field from Authorization header.
+	c.filterSignature(req)
+
+	// Only display request header.
+	reqTrace, err := httputil.DumpRequestOut(req, false)
+	if err != nil {
+		return err
+	}
+
+	// Write request to trace output.
+	_, err = fmt.Fprint(c.traceOutput, string(reqTrace))
+	if err != nil {
+		return err
+	}
+
+	// Only display response header.
+	var respTrace []byte
+
+	// For errors we make sure to dump response body as well.
+	if resp.StatusCode != http.StatusOK &&
+		resp.StatusCode != http.StatusPartialContent &&
+		resp.StatusCode != http.StatusNoContent {
+		respTrace, err = httputil.DumpResponse(resp, true)
 		if err != nil {
 			return err
 		}
-		totalLength += part.Metadata.Size
-		skipParts = append(skipParts, skipPart{
-			md5sum:     md5SumBytes,
-			partNumber: part.Metadata.PartNumber,
-		})
-	}
-
-	// Calculate the optimal part size for a given size
-	partSize := calculatePartSize(size)
-	// Allocate bufferred error channel for maximum parts
-	errCh := make(chan error, maxParts)
-	// Limit multipart queue size to concurrent
-	mpQueueCh := make(chan struct{}, maxConcurrentQueue)
-	defer close(errCh)
-	defer close(mpQueueCh)
-	// Allocate a new wait group
-	wg := new(sync.WaitGroup)
-
-	for p := range chopper(data, partSize, skipParts) {
-		// This check is primarily for last part
-		// This verifies if the part.Len was an unexpected read i.e if we lost few bytes
-		if p.Len < partSize {
-			expectedPartLen := size - totalLength
-			if expectedPartLen != p.Len {
-				return ErrorResponse{
-					Code:     "UnexpectedShortRead",
-					Message:  "Data read ‘" + strconv.FormatInt(expectedPartLen, 10) + "’ is not equal to expected size ‘" + strconv.FormatInt(p.Len, 10) + "’",
-					Resource: separator + bucket + separator + object,
-				}
+	} else {
+		// WORKAROUND for https://github.com/golang/go/issues/13942.
+		// httputil.DumpResponse does not print response headers for
+		// all successful calls which have response ContentLength set
+		// to zero. Keep this workaround until the above bug is fixed.
+		if resp.ContentLength == 0 {
+			var buffer bytes.Buffer
+			if err = resp.Header.Write(&buffer); err != nil {
+				return err
+			}
+			respTrace = buffer.Bytes()
+			respTrace = append(respTrace, []byte("\r\n")...)
+		} else {
+			respTrace, err = httputil.DumpResponse(resp, false)
+			if err != nil {
+				return err
 			}
 		}
-		// Limit to 4 parts a given time
-		mpQueueCh <- struct{}{}
-		// Account for all parts uploaded simultaneousy
-		wg.Add(1)
-		go func(errCh chan<- error, mpQueueCh <-chan struct{}, p part) {
-			defer wg.Done()
-			defer func() {
-				<-mpQueueCh
-			}()
-			if p.Err != nil {
-				errCh <- p.Err
-				return
-			}
-			completedPart, err := a.uploadPart(bucket, object, uploadID, p.MD5Sum, p.Num, p.Len, p.ReadSeeker)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			completeMultipartUpload.Parts = append(completeMultipartUpload.Parts, completedPart)
-			errCh <- nil
-		}(errCh, mpQueueCh, p)
-		totalLength += p.Len
 	}
-	wg.Wait()
-	if err := <-errCh; err != nil {
-		return err
-	}
-	sort.Sort(completedParts(completeMultipartUpload.Parts))
-	_, err := a.completeMultipartUpload(bucket, object, uploadID, completeMultipartUpload)
+	// Write response to trace output.
+	_, err = fmt.Fprint(c.traceOutput, strings.TrimSuffix(string(respTrace), "\r\n"))
 	if err != nil {
 		return err
 	}
+
+	// Ends the http dump.
+	_, err = fmt.Fprintln(c.traceOutput, "---------END-HTTP---------")
+	if err != nil {
+		return err
+	}
+
+	// Returns success.
 	return nil
 }
 
-type multiPartUploadCh struct {
-	Metadata multiPartUpload
-	Err      error
-}
-
-func (a api) listMultipartUploadsRecursive(bucket, object string) <-chan multiPartUploadCh {
-	ch := make(chan multiPartUploadCh, 1000)
-	go a.listMultipartUploadsRecursiveInRoutine(bucket, object, ch)
-	return ch
-}
-
-func (a api) listMultipartUploadsRecursiveInRoutine(bucket, object string, ch chan multiPartUploadCh) {
-	defer close(ch)
-	listMultipartUplResult, err := a.listMultipartUploads(bucket, "", "", object, "", 1000)
+// do - execute http request.
+func (c Client) do(req *http.Request) (*http.Response, error) {
+	// do the request.
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		ch <- multiPartUploadCh{
-			Metadata: multiPartUpload{},
-			Err:      err,
+		// Handle this specifically for now until future Golang
+		// versions fix this issue properly.
+		urlErr, ok := err.(*url.Error)
+		if ok && strings.Contains(urlErr.Err.Error(), "EOF") {
+			return nil, &url.Error{
+				Op:  urlErr.Op,
+				URL: urlErr.URL,
+				Err: fmt.Errorf("Connection closed by foreign host %s. Retry again.", urlErr.URL),
+			}
 		}
-		return
+		return nil, err
 	}
-	for _, multiPartUpload := range listMultipartUplResult.Uploads {
-		ch <- multiPartUploadCh{
-			Metadata: multiPartUpload,
-			Err:      nil,
-		}
+
+	// Response cannot be non-nil, report if its the case.
+	if resp == nil {
+		msg := "Response is empty. " + reportIssue
+		return nil, ErrInvalidArgument(msg)
 	}
-	for {
-		if !listMultipartUplResult.IsTruncated {
-			break
-		}
-		listMultipartUplResult, err = a.listMultipartUploads(bucket,
-			listMultipartUplResult.NextKeyMarker, listMultipartUplResult.NextUploadIDMarker, object, "", 1000)
+
+	// If trace is enabled, dump http request and response.
+	if c.isTraceEnabled {
+		err = c.dumpHTTP(req, resp)
 		if err != nil {
-			ch <- multiPartUploadCh{
-				Metadata: multiPartUpload{},
-				Err:      err,
-			}
-			return
-		}
-		for _, multiPartUpload := range listMultipartUplResult.Uploads {
-			ch <- multiPartUploadCh{
-				Metadata: multiPartUpload,
-				Err:      nil,
-			}
+			return nil, err
 		}
 	}
+	return resp, nil
 }
 
-// PutObject create an object in a bucket
-//
-// You must have WRITE permissions on a bucket to create an object
-//
-// This version of PutObject automatically does multipart for more than 5MB worth of data
-func (a api) PutObject(bucket, object, contentType string, size int64, data io.Reader) error {
-	if err := invalidBucketError(bucket); err != nil {
-		return err
-	}
-	if err := invalidArgumentError(object); err != nil {
-		return err
-	}
-	// for un-authenticated requests do not initiated multipart operation
-	//
-	// NOTE: this behavior is only kept valid for S3, since S3 doesn't
-	// allow unauthenticated multipart requests
-	if a.config.Region != "milkyway" {
-		if a.config.AccessKeyID == "" || a.config.SecretAccessKey == "" {
-			_, err := a.putObjectUnAuthenticated(bucket, object, contentType, size, data)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-	switch {
-	case size < minimumPartSize:
-		// Single Part use case, use PutObject directly
-		for part := range chopper(data, minimumPartSize, nil) {
-			if part.Err != nil {
-				return part.Err
-			}
-			// This verifies if the part.Len was an unexpected read i.e if we lost few bytes
-			if part.Len != size {
-				return ErrorResponse{
-					Code:     "MethodUnexpectedEOF",
-					Message:  "Data read is less than the requested size",
-					Resource: separator + bucket + separator + object,
-				}
-			}
-			_, err := a.putObject(bucket, object, contentType, part.MD5Sum, part.Len, part.ReadSeeker)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-	default:
-		var inProgress bool
-		var inProgressUploadID string
-		for mpUpload := range a.listMultipartUploadsRecursive(bucket, object) {
-			if mpUpload.Err != nil {
-				return mpUpload.Err
-			}
-			if mpUpload.Metadata.Key == object {
-				inProgress = true
-				inProgressUploadID = mpUpload.Metadata.UploadID
-				break
-			}
-		}
-		if !inProgress {
-			return a.newObjectUpload(bucket, object, contentType, size, data)
-		}
-		return a.continueObjectUpload(bucket, object, inProgressUploadID, size, data)
-	}
-	return errors.New("Unexpected control flow, please report this error at https://github.com/minio/minio-go/issues")
+// List of success status.
+var successStatus = []int{
+	http.StatusOK,
+	http.StatusNoContent,
+	http.StatusPartialContent,
 }
 
-// StatObject verify if object exists and you have permission to access it
-func (a api) StatObject(bucket, object string) (ObjectStat, error) {
-	if err := invalidBucketError(bucket); err != nil {
-		return ObjectStat{}, err
+// executeMethod - instantiates a given method, and retries the
+// request upon any error up to maxRetries attempts in a binomially
+// delayed manner using a standard back off algorithm.
+func (c Client) executeMethod(method string, metadata requestMetadata) (res *http.Response, err error) {
+	var isRetryable bool     // Indicates if request can be retried.
+	var bodySeeker io.Seeker // Extracted seeker from io.Reader.
+	if metadata.contentBody != nil {
+		// Check if body is seekable then it is retryable.
+		bodySeeker, isRetryable = metadata.contentBody.(io.Seeker)
 	}
-	if err := invalidObjectError(object); err != nil {
-		return ObjectStat{}, err
-	}
-	return a.headObject(bucket, object)
-}
 
-// RemoveObject remove the object from a bucket
-func (a api) RemoveObject(bucket, object string) error {
-	if err := invalidBucketError(bucket); err != nil {
-		return err
-	}
-	if err := invalidObjectError(object); err != nil {
-		return err
-	}
-	return a.deleteObject(bucket, object)
-}
+	// Create a done channel to control 'ListObjects' go routine.
+	doneCh := make(chan struct{}, 1)
 
-/// Bucket operations
+	// Indicate to our routine to exit cleanly upon return.
+	defer close(doneCh)
 
-// MakeBucket make a new bucket
-//
-// optional arguments are acl and location - by default all buckets are created
-// with ``private`` acl and location set to US Standard if one wishes to set
-// different ACLs and Location one can set them properly.
-//
-// ACL valid values
-//
-//  private - owner gets full access [default]
-//  public-read - owner gets full access, all others get read access
-//  public-read-write - owner gets full access, all others get full access too
-//  authenticated-read - owner gets full access, authenticated users get read access
-//
-// Location valid values which are automatically derived from config endpoint
-//
-//  [ us-west-1 | us-west-2 | eu-west-1 | eu-central-1 | ap-southeast-1 | ap-northeast-1 | ap-southeast-2 | sa-east-1 ]
-//  Default - US standard
-func (a api) MakeBucket(bucket string, acl BucketACL) error {
-	if err := invalidBucketError(bucket); err != nil {
-		return err
-	}
-	if !acl.isValidBucketACL() {
-		return invalidArgumentError("")
-	}
-	location := a.config.Region
-	if location == "milkyway" {
-		location = ""
-	}
-	if location == "us-east-1" {
-		location = ""
-	}
-	return a.putBucket(bucket, string(acl), location)
-}
-
-// SetBucketACL set the permissions on an existing bucket using access control lists (ACL)
-//
-// For example
-//
-//  private - owner gets full access [default]
-//  public-read - owner gets full access, all others get read access
-//  public-read-write - owner gets full access, all others get full access too
-//  authenticated-read - owner gets full access, authenticated users get read access
-//
-func (a api) SetBucketACL(bucket string, acl BucketACL) error {
-	if err := invalidBucketError(bucket); err != nil {
-		return err
-	}
-	if !acl.isValidBucketACL() {
-		return invalidArgumentError("")
-	}
-	return a.putBucketACL(bucket, string(acl))
-}
-
-// GetBucketACL get the permissions on an existing bucket
-//
-// Returned values are:
-//
-//  private - owner gets full access
-//  public-read - owner gets full access, others get read access
-//  public-read-write - owner gets full access, others get full access too
-//  authenticated-read - owner gets full access, authenticated users get read access
-//
-func (a api) GetBucketACL(bucket string) (BucketACL, error) {
-	if err := invalidBucketError(bucket); err != nil {
-		return "", err
-	}
-	policy, err := a.getBucketACL(bucket)
-	if err != nil {
-		return "", err
-	}
-	grants := policy.AccessControlList.Grant
-	switch {
-	case len(grants) == 1:
-		if grants[0].Grantee.URI == "" && grants[0].Permission == "FULL_CONTROL" {
-			return BucketACL("private"), nil
-		}
-	case len(grants) == 2:
-		for _, g := range grants {
-			if g.Grantee.URI == "http://acs.amazonaws.com/groups/global/AuthenticatedUsers" && g.Permission == "READ" {
-				return BucketACL("authenticated-read"), nil
-			}
-			if g.Grantee.URI == "http://acs.amazonaws.com/groups/global/AllUsers" && g.Permission == "READ" {
-				return BucketACL("public-read"), nil
+	// Blank indentifier is kept here on purpose since 'range' without
+	// blank identifiers is only supported since go1.4
+	// https://golang.org/doc/go1.4#forrange.
+	for _ = range c.newRetryTimer(MaxRetry, time.Second, time.Second*30, MaxJitter, doneCh) {
+		// Retry executes the following function body if request has an
+		// error until maxRetries have been exhausted, retry attempts are
+		// performed after waiting for a given period of time in a
+		// binomial fashion.
+		if isRetryable {
+			// Seek back to beginning for each attempt.
+			if _, err = bodySeeker.Seek(0, 0); err != nil {
+				// If seek failed, no need to retry.
+				return nil, err
 			}
 		}
-	case len(grants) == 3:
-		for _, g := range grants {
-			if g.Grantee.URI == "http://acs.amazonaws.com/groups/global/AllUsers" && g.Permission == "WRITE" {
-				return BucketACL("public-read-write"), nil
-			}
-		}
-	}
-	return "", ErrorResponse{
-		Code:      "NoSuchBucketPolicy",
-		Message:   "The specified bucket does not have a bucket policy.",
-		Resource:  "/" + bucket,
-		RequestID: "minio",
-	}
-}
 
-// BucketExists verify if bucket exists and you have permission to access it
-func (a api) BucketExists(bucket string) error {
-	if err := invalidBucketError(bucket); err != nil {
-		return err
-	}
-	return a.headBucket(bucket)
-}
-
-// RemoveBucket deletes the bucket named in the URI
-// NOTE: -
-//  All objects (including all object versions and delete markers)
-//  in the bucket must be deleted before successfully attempting this request
-func (a api) RemoveBucket(bucket string) error {
-	if err := invalidBucketError(bucket); err != nil {
-		return err
-	}
-	return a.deleteBucket(bucket)
-}
-
-// listObjectsInRoutine is an internal goroutine function called for listing objects
-// This function feeds data into channel
-func (a api) listObjectsInRoutine(bucket, prefix string, recursive bool, ch chan ObjectStatCh) {
-	defer close(ch)
-	if err := invalidBucketError(bucket); err != nil {
-		ch <- ObjectStatCh{
-			Stat: ObjectStat{},
-			Err:  err,
-		}
-		return
-	}
-	switch {
-	case recursive == true:
-		var marker string
-		for {
-			result, err := a.listObjects(bucket, marker, prefix, "", 1000)
-			if err != nil {
-				ch <- ObjectStatCh{
-					Stat: ObjectStat{},
-					Err:  err,
-				}
-				return
-			}
-			for _, object := range result.Contents {
-				ch <- ObjectStatCh{
-					Stat: object,
-					Err:  nil,
-				}
-				marker = object.Key
-			}
-			if !result.IsTruncated {
-				break
-			}
-		}
-	default:
-		var marker string
-		for {
-			result, err := a.listObjects(bucket, marker, prefix, "/", 1000)
-			if err != nil {
-				ch <- ObjectStatCh{
-					Stat: ObjectStat{},
-					Err:  err,
-				}
-				return
-			}
-			marker = result.NextMarker
-			for _, object := range result.Contents {
-				ch <- ObjectStatCh{
-					Stat: object,
-					Err:  nil,
-				}
-			}
-			for _, prefix := range result.CommonPrefixes {
-				object := ObjectStat{}
-				object.Key = prefix.Prefix
-				object.Size = 0
-				ch <- ObjectStatCh{
-					Stat: object,
-					Err:  nil,
-				}
-			}
-			if !result.IsTruncated {
-				break
-			}
-		}
-	}
-}
-
-// ListObjects - (List Objects) - List some objects or all recursively
-//
-// ListObjects is a channel based API implemented to facilitate ease of usage of S3 API ListObjects()
-// by automatically recursively traversing all objects on a given bucket if specified.
-//
-// Your input paramters are just bucket, prefix and recursive
-//
-// If you enable recursive as 'true' this function will return back all the objects in a given bucket
-//
-//  eg:-
-//         api := client.New(....)
-//         for message := range api.ListObjects("mytestbucket", "starthere", true) {
-//                 fmt.Println(message.Stat)
-//         }
-//
-func (a api) ListObjects(bucket string, prefix string, recursive bool) <-chan ObjectStatCh {
-	ch := make(chan ObjectStatCh, 1000)
-	go a.listObjectsInRoutine(bucket, prefix, recursive, ch)
-	return ch
-}
-
-// listBucketsInRoutine is an internal go routine function called for listing buckets
-// This function feeds data into channel
-func (a api) listBucketsInRoutine(ch chan BucketStatCh) {
-	defer close(ch)
-	listAllMyBucketListResults, err := a.listBuckets()
-	if err != nil {
-		ch <- BucketStatCh{
-			Stat: BucketStat{},
-			Err:  err,
-		}
-		return
-	}
-	for _, bucket := range listAllMyBucketListResults.Buckets.Bucket {
-		ch <- BucketStatCh{
-			Stat: bucket,
-			Err:  nil,
-		}
-	}
-
-}
-
-// ListBuckets list of all buckets owned by the authenticated sender of the request
-//
-// NOTE:
-//     This call requires explicit authentication, no anonymous
-//     requests are allowed for listing buckets
-//
-//  eg:-
-//         api := client.New(....)
-//         for message := range api.ListBuckets() {
-//                 fmt.Println(message.Stat)
-//         }
-//
-func (a api) ListBuckets() <-chan BucketStatCh {
-	ch := make(chan BucketStatCh, 100)
-	go a.listBucketsInRoutine(ch)
-	return ch
-}
-
-func (a api) dropIncompleteUploadInRoutine(bucket, object string, errorCh chan error) {
-	defer close(errorCh)
-	if err := invalidBucketError(bucket); err != nil {
-		errorCh <- err
-		return
-	}
-	if err := invalidObjectError(object); err != nil {
-		errorCh <- err
-		return
-	}
-	listMultipartUplResult, err := a.listMultipartUploads(bucket, "", "", object, "", 1000)
-	if err != nil {
-		errorCh <- err
-		return
-	}
-	for _, multiPartUpload := range listMultipartUplResult.Uploads {
-		if object == multiPartUpload.Key {
-			err := a.abortMultipartUpload(bucket, multiPartUpload.Key, multiPartUpload.UploadID)
-			if err != nil {
-				errorCh <- err
-				return
-			}
-			return
-		}
-	}
-	for {
-		if !listMultipartUplResult.IsTruncated {
-			break
-		}
-		listMultipartUplResult, err = a.listMultipartUploads(bucket,
-			listMultipartUplResult.NextKeyMarker, listMultipartUplResult.NextUploadIDMarker, object, "", 1000)
+		// Instantiate a new request.
+		var req *http.Request
+		req, err = c.newRequest(method, metadata)
 		if err != nil {
-			errorCh <- err
-			return
+			errResponse := ToErrorResponse(err)
+			if isS3CodeRetryable(errResponse.Code) {
+				continue // Retry.
+			}
+			return nil, err
 		}
-		for _, multiPartUpload := range listMultipartUplResult.Uploads {
-			if object == multiPartUpload.Key {
-				err := a.abortMultipartUpload(bucket, multiPartUpload.Key, multiPartUpload.UploadID)
-				if err != nil {
-					errorCh <- err
-					return
-				}
-				return
+
+		// Initiate the request.
+		res, err = c.do(req)
+		if err != nil {
+			// For supported network errors verify.
+			if isNetErrorRetryable(err) {
+				continue // Retry.
+			}
+			// For other errors, return here no need to retry.
+			return nil, err
+		}
+
+		// For any known successful http status, return quickly.
+		for _, httpStatus := range successStatus {
+			if httpStatus == res.StatusCode {
+				return res, nil
 			}
 		}
 
+		// Read the body to be saved later.
+		errBodyBytes, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return nil, err
+		}
+		// Save the body.
+		errBodySeeker := bytes.NewReader(errBodyBytes)
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// For errors verify if its retryable otherwise fail quickly.
+		errResponse := ToErrorResponse(httpRespToErrorResponse(res, metadata.bucketName, metadata.objectName))
+		// Bucket region if set in error response, we can retry the
+		// request with the new region.
+		if errResponse.Region != "" {
+			c.bucketLocCache.Set(metadata.bucketName, errResponse.Region)
+			continue // Retry.
+		}
+
+		// Verify if error response code is retryable.
+		if isS3CodeRetryable(errResponse.Code) {
+			continue // Retry.
+		}
+
+		// Verify if http status code is retryable.
+		if isHTTPStatusRetryable(res.StatusCode) {
+			continue // Retry.
+		}
+
+		// Save the body back again.
+		errBodySeeker.Seek(0, 0) // Seek back to starting point.
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// For all other cases break out of the retry loop.
+		break
 	}
+	return res, err
 }
 
-//
-//
-// NOTE:
-//   These set of calls require explicit authentication, no anonymous
-//   requests are allowed for multipart API
-
-// DropIncompleteUpload - abort a specific in progress active multipart upload
-func (a api) DropIncompleteUpload(bucket, object string) <-chan error {
-	errorCh := make(chan error)
-	go a.dropIncompleteUploadInRoutine(bucket, object, errorCh)
-	return errorCh
-}
-
-func (a api) dropAllIncompleteUploadsInRoutine(bucket string, errorCh chan error) {
-	defer close(errorCh)
-	if err := invalidBucketError(bucket); err != nil {
-		errorCh <- err
-		return
+// newRequest - instantiate a new HTTP request for a given method.
+func (c Client) newRequest(method string, metadata requestMetadata) (req *http.Request, err error) {
+	// If no method is supplied default to 'POST'.
+	if method == "" {
+		method = "POST"
 	}
-	listMultipartUplResult, err := a.listMultipartUploads(bucket, "", "", "", "", 1000)
+
+	// Default all requests to "us-east-1" or "cn-north-1" (china region)
+	location := "us-east-1"
+	if isAmazonChinaEndpoint(c.endpointURL) {
+		// For china specifically we need to set everything to
+		// cn-north-1 for now, there is no easier way until AWS S3
+		// provides a cleaner compatible API across "us-east-1" and
+		// China region.
+		location = "cn-north-1"
+	}
+
+	// Gather location only if bucketName is present.
+	if metadata.bucketName != "" {
+		location, err = c.getBucketLocation(metadata.bucketName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Save location.
+	metadata.bucketLocation = location
+
+	// Construct a new target URL.
+	targetURL, err := c.makeTargetURL(metadata.bucketName, metadata.objectName, metadata.bucketLocation, metadata.queryValues)
 	if err != nil {
-		errorCh <- err
-		return
+		return nil, err
 	}
-	for _, multiPartUpload := range listMultipartUplResult.Uploads {
-		err := a.abortMultipartUpload(bucket, multiPartUpload.Key, multiPartUpload.UploadID)
-		if err != nil {
-			errorCh <- err
-			return
-		}
+
+	// Initialize a new HTTP request for the method.
+	req, err = http.NewRequest(method, targetURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
-	for {
-		if !listMultipartUplResult.IsTruncated {
-			break
+
+	// Generate presign url if needed, return right here.
+	if metadata.expires != 0 && metadata.presignURL {
+		if c.anonymous {
+			return nil, ErrInvalidArgument("Requests cannot be presigned with anonymous credentials.")
 		}
-		listMultipartUplResult, err = a.listMultipartUploads(bucket,
-			listMultipartUplResult.NextKeyMarker, listMultipartUplResult.NextUploadIDMarker, "", "", 1000)
-		if err != nil {
-			errorCh <- err
-			return
+		if c.signature.isV2() {
+			// Presign URL with signature v2.
+			req = preSignV2(*req, c.accessKeyID, c.secretAccessKey, metadata.expires)
+		} else {
+			// Presign URL with signature v4.
+			req = preSignV4(*req, c.accessKeyID, c.secretAccessKey, location, metadata.expires)
 		}
-		for _, multiPartUpload := range listMultipartUplResult.Uploads {
-			err := a.abortMultipartUpload(bucket, multiPartUpload.Key, multiPartUpload.UploadID)
-			if err != nil {
-				errorCh <- err
-				return
+		return req, nil
+	}
+
+	// Set content body if available.
+	if metadata.contentBody != nil {
+		req.Body = ioutil.NopCloser(metadata.contentBody)
+	}
+
+	// FIXEM: Enable this when Google Cloud Storage properly supports 100-continue.
+	// Skip setting 'expect' header for Google Cloud Storage, there
+	// are some known issues - https://github.com/restic/restic/issues/520
+	if !isGoogleEndpoint(c.endpointURL) {
+		// Set 'Expect' header for the request.
+		req.Header.Set("Expect", "100-continue")
+	}
+
+	// Set 'User-Agent' header for the request.
+	c.setUserAgent(req)
+
+	// Set all headers.
+	for k, v := range metadata.customHeader {
+		req.Header.Set(k, v[0])
+	}
+
+	// set incoming content-length.
+	if metadata.contentLength > 0 {
+		req.ContentLength = metadata.contentLength
+	}
+
+	// Set sha256 sum only for non anonymous credentials.
+	if !c.anonymous {
+		// set sha256 sum for signature calculation only with
+		// signature version '4'.
+		if c.signature.isV4() {
+			req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256([]byte{})))
+			if metadata.contentSHA256Bytes != nil {
+				req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(metadata.contentSHA256Bytes))
 			}
 		}
+	}
 
+	// set md5Sum for content protection.
+	if metadata.contentMD5Bytes != nil {
+		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(metadata.contentMD5Bytes))
+	}
+
+	// Sign the request for all authenticated requests.
+	if !c.anonymous {
+		if c.signature.isV2() {
+			// Add signature version '2' authorization header.
+			req = signV2(*req, c.accessKeyID, c.secretAccessKey)
+		} else if c.signature.isV4() {
+			// Add signature version '4' authorization header.
+			req = signV4(*req, c.accessKeyID, c.secretAccessKey, location)
+		}
+	}
+
+	// Return request.
+	return req, nil
+}
+
+// set User agent.
+func (c Client) setUserAgent(req *http.Request) {
+	req.Header.Set("User-Agent", libraryUserAgent)
+	if c.appInfo.appName != "" && c.appInfo.appVersion != "" {
+		req.Header.Set("User-Agent", libraryUserAgent+" "+c.appInfo.appName+"/"+c.appInfo.appVersion)
 	}
 }
 
-// DropAllIncompleteUploads - abort all inprogress active multipart uploads
-func (a api) DropAllIncompleteUploads(bucket string) <-chan error {
-	errorCh := make(chan error)
-	go a.dropAllIncompleteUploadsInRoutine(bucket, errorCh)
-	return errorCh
+// makeTargetURL make a new target url.
+func (c Client) makeTargetURL(bucketName, objectName, bucketLocation string, queryValues url.Values) (*url.URL, error) {
+	// Save host.
+	host := c.endpointURL.Host
+	// For Amazon S3 endpoint, try to fetch location based endpoint.
+	if isAmazonEndpoint(c.endpointURL) {
+		// Fetch new host based on the bucket location.
+		host = getS3Endpoint(bucketLocation)
+	}
+	// Save scheme.
+	scheme := c.endpointURL.Scheme
+
+	urlStr := scheme + "://" + host + "/"
+	// Make URL only if bucketName is available, otherwise use the
+	// endpoint URL.
+	if bucketName != "" {
+		// Save if target url will have buckets which suppport virtual host.
+		isVirtualHostStyle := isVirtualHostSupported(c.endpointURL, bucketName)
+
+		// If endpoint supports virtual host style use that always.
+		// Currently only S3 and Google Cloud Storage would support
+		// virtual host style.
+		if isVirtualHostStyle {
+			urlStr = scheme + "://" + bucketName + "." + host + "/"
+			if objectName != "" {
+				urlStr = urlStr + urlEncodePath(objectName)
+			}
+		} else {
+			// If not fall back to using path style.
+			urlStr = urlStr + bucketName + "/"
+			if objectName != "" {
+				urlStr = urlStr + urlEncodePath(objectName)
+			}
+		}
+	}
+	// If there are any query values, add them to the end.
+	if len(queryValues) > 0 {
+		urlStr = urlStr + "?" + queryEncode(queryValues)
+	}
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
 }
