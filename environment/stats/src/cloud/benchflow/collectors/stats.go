@@ -203,12 +203,12 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		composedContainerIds = composedContainerIds+container.ID+","
 		composedHostIds = composedHostIds+container.HostID+","
 		//callMinioClient("/app/"+container.ID+"_stats_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_stats.gz")
-		minio.SendGzipToMinio("/app/"+container.Name+"_stats_tmp.gz", os.Getenv("MINIO_HOST"), minioKey+"_stats.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+		minio.SendGzipToMinio("/app/"+container.Name+"_stats_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_stats.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		if container.Network == "host" {
 			//callMinioClient("/app/"+container.ID+"_network_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_network.gz")
-			minio.SendGzipToMinio("/app/"+container.Name+"_network_tmp.gz", os.Getenv("MINIO_HOST"), minioKey+"_network.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+			minio.SendGzipToMinio("/app/"+container.Name+"_network_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_network.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 			//callMinioClient("/app/"+container.ID+"_top_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_top.gz")
-			minio.SendGzipToMinio("/app/"+container.Name+"_top_tmp.gz", os.Getenv("MINIO_HOST"), minioKey+"_top.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+			minio.SendGzipToMinio("/app/"+container.Name+"_top_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_top.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		}
 		err := os.Remove("/app/"+container.Name+"_stats_tmp.gz")
 		if err != nil {
