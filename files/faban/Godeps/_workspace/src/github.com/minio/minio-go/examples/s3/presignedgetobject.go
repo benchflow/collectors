@@ -20,24 +20,34 @@ package main
 
 import (
 	"log"
+	"net/url"
 	"time"
 
 	"github.com/minio/minio-go"
 )
 
 func main() {
-	config := minio.Config{
-		AccessKeyID:     "YOUR-ACCESS-KEY-HERE",
-		SecretAccessKey: "YOUR-PASSWORD-HERE",
-		Endpoint:        "https://s3.amazonaws.com",
-	}
-	s3Client, err := minio.New(config)
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY, my-bucketname and my-objectname
+	// are dummy values, please replace them with original values.
+
+	// Requests are always secure (HTTPS) by default. Set secure=false to enable insecure (HTTP) access.
+	// This boolean value is the last argument for New().
+
+	// New returns an Amazon S3 compatible client object. API compatibility (v2 or v4) is automatically
+	// determined based on the Endpoint value.
+	s3Client, err := minio.New("s3.amazonaws.com", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	string, err := s3Client.PresignedGetObject("mybucket", "myobject", time.Duration(1000)*time.Second)
+
+	// Set request parameters
+	reqParams := make(url.Values)
+	reqParams.Set("response-content-disposition", "attachment; filename=\"your-filename.txt\"")
+
+	// Gernerate presigned get object url.
+	presignedURL, err := s3Client.PresignedGetObject("my-bucketname", "my-objectname", time.Duration(1000)*time.Second, reqParams)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Println(string)
+	log.Println(presignedURL)
 }
