@@ -75,7 +75,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     outfile.Close()
     minio.GzipFile("/app/database_table_sizes_backup.csv")
     //callMinioClient("/app/database_table_sizes_backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/database_table_sizes.csv.gz")
-    minio.SendGzipToMinio("/app/database_table_sizes_backup.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/database_table_sizes.csv.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+    minio.SendGzipToMinio("/app/database_table_sizes_backup.csv.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), databaseMinioKey+"/database_table_sizes.csv.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 	//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+".csv.gz")
 	err = os.Remove("/app/database_table_sizes_backup.csv.gz")
 	if err != nil {
@@ -106,7 +106,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    outfile.Close()
 	    minio.GzipFile("/app/"+each+"_backup.csv")
 	    //callMinioClient("/app/"+each+"_backup.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+".csv.gz")
-	    minio.SendGzipToMinio("/app/"+each+"_backup.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/"+each+".csv.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+	    minio.SendGzipToMinio("/app/"+each+"_backup.csv.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), databaseMinioKey+"/"+each+".csv.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+".csv.gz")
 		err = os.Remove("/app/"+each+"_backup.csv.gz")
 		if err != nil {
@@ -144,7 +144,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    outfile.Close()
 	    minio.GzipFile("/app/"+each+"_backup_schema.csv")
 	    //callMinioClient("/app/"+each+"_backup_schema.csv.gz", os.Getenv("MINIO_ALIAS"), databaseMinioKey+"/"+each+"_schema.csv.gz")
-	    minio.SendGzipToMinio("/app/"+each+"_backup_schema.csv.gz", os.Getenv("MINIO_HOST"), databaseMinioKey+"/"+each+"_schema.csv.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
+	    minio.SendGzipToMinio("/app/"+each+"_backup_schema.csv.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), databaseMinioKey+"/"+each+"_schema.csv.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		//minio.StoreOnMinio("backup.csv.gz", "runs", databaseMinioKey+each+"_schema.csv.gz")
 		err = os.Remove("/app/"+each+"_backup_schema.csv.gz")
 		if err != nil {

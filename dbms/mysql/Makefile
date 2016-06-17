@@ -18,6 +18,8 @@ save_dependencies:
 
 get_commons_dependencies:
 	#TODO: get from the builded release, and not directly from the repository code
+	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/
+	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/kafka.go https://github.com/benchflow/commons/raw/dev/kafka/go/src/cloud/benchflow/commons/kafka/kafka.go
 	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/minio/
 	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/minio/minio.go https://github.com/benchflow/commons/raw/dev/minio/go/src/cloud/benchflow/commons/minio/minio.go
 
