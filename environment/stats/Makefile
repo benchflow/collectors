@@ -21,7 +21,7 @@ get_commons_dependencies:
 	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/minio/
 	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/minio/minio.go https://github.com/benchflow/commons/raw/dev/minio/go/src/cloud/benchflow/commons/minio/minio.go
 	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/
-	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/kafka.go https://github.com/benchflow/commons/raw/dev/minio/go/src/cloud/benchflow/commons/kafka/kafka.go
+	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/kafka.go https://github.com/benchflow/commons/raw/dev/kafka/go/src/cloud/benchflow/commons/kafka/kafka.go
 
 restore_external_dependencies:
 	GOPATH=$(GOPATH_SAVE_RESTORE) godep restore ./...
