@@ -16,7 +16,6 @@ import (
 )
 
 type Container struct {
-	HostID		 string
 	Name         string
 	ID           string
 	statsChannel chan *docker.Stats
@@ -25,6 +24,7 @@ type Container struct {
 }
 
 var containers []Container
+var hostID string
 var stopChannel chan bool
 var waitGroup sync.WaitGroup
 var collecting bool
@@ -135,13 +135,17 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := createDockerClient()
+	hostInfo, err := client.Info()
+	if err != nil {
+		panic(err)
+	}
+	hostID = hostInfo.ID
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ",")
 	containers = []Container{}
 	stopChannel = make(chan bool)
 	for _, each := range conts {
 		containerInspect, err := client.InspectContainer(each)
-		hostInfo, err := client.Info()
 		networks := containerInspect.NetworkSettings.Networks
 		// Assuming bridge by default if not host
 		/*
@@ -160,13 +164,12 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		ID := containerInspect.ID
-		hostID := hostInfo.ID
 		if err != nil {
 			panic(err)
 			}
 		statsChannel := make(chan *docker.Stats)
 		doneChannel := make(chan bool)
-		c := Container{Name: each, ID: ID, HostID:hostID, statsChannel: statsChannel, doneChannel: doneChannel, Network: network}
+		c := Container{Name: each, ID: ID, statsChannel: statsChannel, doneChannel: doneChannel, Network: network}
 		containers = append(containers, c)
 		attachToContainer(client, c)
 		collectStats(c)
@@ -190,7 +193,6 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	collecting = false
 	composedMinioKey := ""
 	composedContainerIds := ""
-	composedHostIds := ""
 	for _, container := range containers {
 		minio.GzipFile("/app/"+container.Name+"_stats_tmp")
 		if container.Network == "host" {
@@ -201,7 +203,6 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(minioKey)
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+container.ID+","
-		composedHostIds = composedHostIds+container.HostID+","
 		//callMinioClient("/app/"+container.ID+"_stats_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_stats.gz")
 		minio.SendGzipToMinio("/app/"+container.Name+"_stats_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_stats.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		if container.Network == "host" {
@@ -227,9 +228,8 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
 	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
-	composedHostIds = strings.TrimRight(composedHostIds, ",")
 	//signalOnKafka(composedMinioKey, composedContainerIds)
-	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedHostIds, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	fmt.Fprintf(w, "Stopped collecting")
 }
 
