@@ -18,23 +18,28 @@ var client docker.Client
 func storeData(w http.ResponseWriter, r *http.Request) {
 	composedMinioKey := ""
 	composedContainerIds := ""
-	composedHostIds := ""
 	
-	since := r.FormValue("since")
-	sinceInt, err := strconv.ParseInt(since, 10, 64)
+	info, err := client.Info()
 	if err != nil {
 		panic(err)
 		}
+	hostID := info.ID
+	
+	since := r.FormValue("since")
+	var sinceInt int64
+	sinceInt = 0
+	if since != "" {
+		sinceInt, err = strconv.ParseInt(since, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+	}
 	
 	client = createDockerClient()
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ",")
 	
 	for _, container := range conts {
-		info, err := client.Info()
-		if err != nil {
-			panic(err)
-			}
 		inspect, err := client.InspectContainer(container)
 		if err != nil {
 			panic(err)
@@ -69,7 +74,6 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+inspect.ID+","
-		composedHostIds = composedHostIds+info.ID+","
 		
 		minio.SendGzipToMinio(inspect.Name+"_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+".gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		//callMinioClient(container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
@@ -80,7 +84,7 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		//minio.StoreOnMinio(container.ID+"_tmp_err.gz", "runs", minioKey)
 		//kafka.SignalOnKafka(minioKey)
 	}
-	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedHostIds, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 }
 
 func createDockerClient() docker.Client {
