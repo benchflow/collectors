@@ -22,11 +22,22 @@ func createDockerClient() docker.Client {
 
 func storeData(w http.ResponseWriter, r *http.Request) {
 	client := createDockerClient()
+	
+	info, err := client.Info()
+	if err != nil {
+		panic(err)
+		}
+	
+	version, err := client.Version()
+	if err != nil {
+		panic(err)
+		}
+	
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ",")
 	composedMinioKey := ""
 	composedContainerIds := ""
-	composedHostIds := ""
+	hostID := info.ID
 	for _, each := range conts {
 		var e docker.Env
 		
@@ -50,17 +61,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		e.SetJSON("inspect", inspect)
 		foInspect.Write([]byte(e.Get("inspect")))
 		
-		info, err := client.Info()
-		if err != nil {
-			panic(err)
-			}
 		e.SetJSON("info", info)
 		foInfo.Write([]byte(e.Get("info")))
 		
-		version, err := client.Version()
-		if err != nil {
-			panic(err)
-			}
 		e.SetJSON("version", version)
 		foVersion.Write([]byte(e.Get("version")))
 		
@@ -72,7 +75,6 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		minioKey := minio.GenerateKey(each, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+inspect.ID+","
-		composedHostIds = composedHostIds+info.ID+","
 		
 		fmt.Println(minioKey)
 		
@@ -98,10 +100,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
 	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
-	composedHostIds = strings.TrimRight(composedHostIds, ",")
 	fmt.Println(composedMinioKey)
 	//kafka.SignalOnKafka(composedMinioKey, composedContainerIds)
-	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedHostIds, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	}
 
 func main() {

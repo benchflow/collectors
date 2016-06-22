@@ -30,12 +30,12 @@ func callMinioClient(fileName string, minioHost string, minioKey string) {
 }
 */
 
-func SendGzipToMinio(fileName string, minioHost string, minioKey string, accessKey string, secretAccessKey string) {
-	sendToMinio(fileName, minioHost, minioKey, accessKey, secretAccessKey, "application/gzip")
+func SendGzipToMinio(fileName string, minioHost string, minioPort string, minioKey string, accessKey string, secretAccessKey string) {
+	sendToMinio(fileName, minioHost, minioPort, minioKey, accessKey, secretAccessKey, "application/gzip")
 	}
 
-func sendToMinio(fileName string, minioHost string, minioKey string, accessKey string, secretAccessKey string, fileType string) error {
-	minioClient, err := minio.New(minioHost+":9000", accessKey, secretAccessKey, false)
+func sendToMinio(fileName string, minioHost string, minioPort string, minioKey string, accessKey string, secretAccessKey string, fileType string) error {
+	minioClient, err := minio.New(minioHost+":"+minioPort, accessKey, secretAccessKey, false)
 	if err != nil {
 		fmt.Println(err)
 	    return err
