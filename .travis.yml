@@ -24,10 +24,11 @@ cache:
 before_install:
   - go get github.com/tools/godep
 
-install:
-  - make
+# test that the services build correclty
+install: make all
 
-script: make test
+# test that the image correclty build
+script: make build_container
 
 before_deploy:
   # Clean the v-dev release and tag we are using to release development version in CI

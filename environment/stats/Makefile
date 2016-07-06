@@ -45,6 +45,9 @@ install:
 test:
 	godep go test ./src/cloud/benchflow/collectors/stats.go
 
+build_container:
+	docker build -t $(DOCKERIMAGENAME)_$(VERSION) -f Dockerfile .
+
 build_container_local:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 godep go build -ldflags '-s' -o bin/$(NAME)_linux -v ./src/cloud/benchflow/collectors/stats.go
 	docker build -t $(DOCKERIMAGENAME)_$(VERSION) -f Dockerfile.test .
