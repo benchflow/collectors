@@ -94,7 +94,7 @@ func createDockerClient() docker.Client {
 		log.Fatal(err)
 		}
 	return *client
-	}
+}
 
 func main() {
 	client = createDockerClient()
