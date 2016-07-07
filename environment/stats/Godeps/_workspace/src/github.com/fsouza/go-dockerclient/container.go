@@ -275,7 +275,6 @@ type Config struct {
 	MemorySwap        int64               `json:"MemorySwap,omitempty" yaml:"MemorySwap,omitempty"`
 	MemoryReservation int64               `json:"MemoryReservation,omitempty" yaml:"MemoryReservation,omitempty"`
 	KernelMemory      int64               `json:"KernelMemory,omitempty" yaml:"KernelMemory,omitempty"`
-	PidsLimit         int64               `json:"PidsLimit,omitempty" yaml:"PidsLimit,omitempty"`
 	CPUShares         int64               `json:"CpuShares,omitempty" yaml:"CpuShares,omitempty"`
 	CPUSet            string              `json:"Cpuset,omitempty" yaml:"Cpuset,omitempty"`
 	AttachStdin       bool                `json:"AttachStdin,omitempty" yaml:"AttachStdin,omitempty"`
@@ -283,6 +282,8 @@ type Config struct {
 	AttachStderr      bool                `json:"AttachStderr,omitempty" yaml:"AttachStderr,omitempty"`
 	PortSpecs         []string            `json:"PortSpecs,omitempty" yaml:"PortSpecs,omitempty"`
 	ExposedPorts      map[Port]struct{}   `json:"ExposedPorts,omitempty" yaml:"ExposedPorts,omitempty"`
+	PublishService    string              `json:"PublishService,omitempty" yaml:"PublishService,omitempty"`
+	ArgsEscaped       bool                `json:"ArgsEscaped,omitempty" yaml:"ArgsEscaped,omitempty"`
 	StopSignal        string              `json:"StopSignal,omitempty" yaml:"StopSignal,omitempty"`
 	Tty               bool                `json:"Tty,omitempty" yaml:"Tty,omitempty"`
 	OpenStdin         bool                `json:"OpenStdin,omitempty" yaml:"OpenStdin,omitempty"`
@@ -482,9 +483,10 @@ func (c *Client) ContainerChanges(id string) ([]Change, error) {
 //
 // See https://goo.gl/WxQzrr for more details.
 type CreateContainerOptions struct {
-	Name       string
-	Config     *Config     `qs:"-"`
-	HostConfig *HostConfig `qs:"-"`
+	Name             string
+	Config           *Config           `qs:"-"`
+	HostConfig       *HostConfig       `qs:"-"`
+	NetworkingConfig *NetworkingConfig `qs:"-"`
 }
 
 // CreateContainer creates a new container, returning the container instance,
@@ -499,10 +501,12 @@ func (c *Client) CreateContainer(opts CreateContainerOptions) (*Container, error
 		doOptions{
 			data: struct {
 				*Config
-				HostConfig *HostConfig `json:"HostConfig,omitempty" yaml:"HostConfig,omitempty"`
+				HostConfig       *HostConfig       `json:"HostConfig,omitempty" yaml:"HostConfig,omitempty"`
+				NetworkingConfig *NetworkingConfig `json:"NetworkingConfig,omitempty" yaml:"NetworkingConfig,omitempty"`
 			}{
 				opts.Config,
 				opts.HostConfig,
+				opts.NetworkingConfig,
 			},
 		},
 	)
@@ -544,6 +548,8 @@ type KeyValuePair struct {
 //   - always: the docker daemon will always restart the container
 //   - on-failure: the docker daemon will restart the container on failures, at
 //                 most MaximumRetryCount times
+//   - unless-stopped: the docker daemon will always restart the container except
+//                 when user has manually stopped the container
 //   - no: the docker daemon will not restart the container automatically
 type RestartPolicy struct {
 	Name              string `json:"Name,omitempty" yaml:"Name,omitempty"`
@@ -560,6 +566,12 @@ func AlwaysRestart() RestartPolicy {
 // restart the container on failures, trying at most maxRetry times.
 func RestartOnFailure(maxRetry int) RestartPolicy {
 	return RestartPolicy{Name: "on-failure", MaximumRetryCount: maxRetry}
+}
+
+// RestartUnlessStopped returns a restart policy that tells the Docker daemon to
+// always restart the container except when user has manually stopped the container.
+func RestartUnlessStopped() RestartPolicy {
+	return RestartPolicy{Name: "unless-stopped"}
 }
 
 // NeverRestart returns a restart policy that tells the Docker daemon to never
@@ -622,8 +634,11 @@ type HostConfig struct {
 	LogConfig            LogConfig              `json:"LogConfig,omitempty" yaml:"LogConfig,omitempty"`
 	ReadonlyRootfs       bool                   `json:"ReadonlyRootfs,omitempty" yaml:"ReadonlyRootfs,omitempty"`
 	SecurityOpt          []string               `json:"SecurityOpt,omitempty" yaml:"SecurityOpt,omitempty"`
+	Cgroup               string                 `json:"Cgroup,omitempty" yaml:"Cgroup,omitempty"`
 	CgroupParent         string                 `json:"CgroupParent,omitempty" yaml:"CgroupParent,omitempty"`
 	Memory               int64                  `json:"Memory,omitempty" yaml:"Memory,omitempty"`
+	MemoryReservation    int64                  `json:"MemoryReservation,omitempty" yaml:"MemoryReservation,omitempty"`
+	KernelMemory         int64                  `json:"KernelMemory,omitempty" yaml:"KernelMemory,omitempty"`
 	MemorySwap           int64                  `json:"MemorySwap,omitempty" yaml:"MemorySwap,omitempty"`
 	MemorySwappiness     int64                  `json:"MemorySwappiness,omitempty" yaml:"MemorySwappiness,omitempty"`
 	OOMKillDisable       bool                   `json:"OomKillDisable,omitempty" yaml:"OomKillDisable"`
@@ -642,15 +657,38 @@ type HostConfig struct {
 	Ulimits              []ULimit               `json:"Ulimits,omitempty" yaml:"Ulimits,omitempty"`
 	VolumeDriver         string                 `json:"VolumeDriver,omitempty" yaml:"VolumeDriver,omitempty"`
 	OomScoreAdj          int                    `json:"OomScoreAdj,omitempty" yaml:"OomScoreAdj,omitempty"`
+	PidsLimit            int64                  `json:"PidsLimit,omitempty" yaml:"PidsLimit,omitempty"`
 	ShmSize              int64                  `json:"ShmSize,omitempty" yaml:"ShmSize,omitempty"`
+	Tmpfs                map[string]string      `json:"Tmpfs,omitempty" yaml:"Tmpfs,omitempty"`
+	AutoRemove           bool                   `json:"AutoRemove,omitempty" yaml:"AutoRemove,omitempty"`
+	StorageOpt           map[string]string      `json:"StorageOpt,omitempty" yaml:"StorageOpt,omitempty"`
+	Sysctls              map[string]string      `json:"Sysctls,omitempty" yaml:"Sysctls,omitempty"`
+}
+
+// NetworkingConfig represents the container's networking configuration for each of its interfaces
+// Carries the networking configs specified in the `docker run` and `docker network connect` commands
+type NetworkingConfig struct {
+	EndpointsConfig map[string]*EndpointConfig // Endpoint configs for each connecting network
 }
 
 // StartContainer starts a container, returning an error in case of failure.
 //
+// Passing the HostConfig to this method has been deprecated in Docker API 1.22
+// (Docker Engine 1.10.x) and totally removed in Docker API 1.24 (Docker Engine
+// 1.12.x). The client will ignore the parameter when communicating with Docker
+// API 1.24 or greater.
+//
 // See https://goo.gl/MrBAJv for more details.
 func (c *Client) StartContainer(id string, hostConfig *HostConfig) error {
+	var opts doOptions
 	path := "/containers/" + id + "/start"
-	resp, err := c.do("POST", path, doOptions{data: hostConfig, forceJSON: true})
+	if c.serverAPIVersion == nil {
+		c.checkAPIVersion()
+	}
+	if c.serverAPIVersion != nil && c.serverAPIVersion.LessThan(apiVersion124) {
+		opts = doOptions{data: hostConfig, forceJSON: true}
+	}
+	resp, err := c.do("POST", path, opts)
 	if err != nil {
 		if e, ok := err.(*Error); ok && e.Status == http.StatusNotFound {
 			return &NoSuchContainer{ID: id, Err: err}
