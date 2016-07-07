@@ -2,31 +2,45 @@ REPONAME = collectors
 NAME = mysql
 DOCKERIMAGENAME = benchflow/$(REPONAME):$(NAME)
 VERSION = dev
-GOPATH_SAVE_RESTORE:=`pwd`"/Godeps/_workspace"
+GOPATH_SAVE_RESTORE:=$(shell pwd):${GOPATH}
 
 .PHONY: all get_commons_dependencies build_release 
 
 all: get_commons_dependencies build_release
 
 save_dependencies:
-	cd src/cloud/benchflow/$(REPONAME)/ && \
-	GOPATH=$(GOPATH_SAVE_RESTORE) godep save ./... && \
-	rm -rf ../../../../Godeps/*.* && \
-	rm -rf ../../../../Godeps && \
-	mv Godeps/ ../../../.. && \
-	cd ../../../..
+	# TODO: figure out how to get the following work, currently we add the dependencies to the Godeps.json manually
+	# - refer to the following issue: https://github.com/benchflow/benchflow/issues/33
+	# cd src/cloud/benchflow/$(REPONAME)/ && \
+	# GOPATH=$(GOPATH_SAVE_RESTORE) godep save ./... && \
+	# rm -rf ../../../../Godeps/*.* && \
+	# rm -rf ../../../../Godeps && \
+	# mv Godeps/ ../../../.. && \
+	# cd ../../../..
 
 get_commons_dependencies:
-	#TODO: get from the builded release, and not directly from the repository code
+	# TODO: decide how to get also the commons' dependencies from the relatinve Godeps file in the commons repo
+	# - refer to the following issue: https://github.com/benchflow/benchflow/issues/33
 	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/
-	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/kafka.go https://github.com/benchflow/commons/raw/dev/kafka/go/src/cloud/benchflow/commons/kafka/kafka.go
+	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/kafka/kafka.go https://github.com/benchflow/commons/releases/download/v-dev/kafka.go
 	mkdir -p ./Godeps/_workspace/src/github.com/benchflow/commons/minio/
-	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/minio/minio.go https://github.com/benchflow/commons/raw/dev/minio/go/src/cloud/benchflow/commons/minio/minio.go
+	wget -O ./Godeps/_workspace/src/github.com/benchflow/commons/minio/minio.go https://github.com/benchflow/commons/releases/download/v-dev/minio.go
 
 restore_external_dependencies:
+	rm -rf Godeps/_workspace/src/github.com/*
 	GOPATH=$(GOPATH_SAVE_RESTORE) godep restore ./...
+	# TODO: make it working with all but cloud folder
+	mv src/github.com/* Godeps/_workspace/src/github.com
+	rm -rf src/github.com
 
-restore_dependencies: get_commons_dependencies restore_external_dependencies
+restore_dependencies: restore_external_dependencies get_commons_dependencies
+
+# TODO: figure out how to get vendor dependencies committed with the standard git flow
+	# - refer to the following issue: https://github.com/benchflow/benchflow/issues/33
+prepare_to_commit:
+	cd Godeps && \
+	find . | grep .git/ | xargs rm -rf && \
+	git add --all -f .
 
 clean:
 	go clean -i ./...
