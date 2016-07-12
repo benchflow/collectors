@@ -1,0 +1,24 @@
+stats:
+  image: benchflow/collectors:stats_dev
+  environment:
+  - BENCHFLOW_DATA_NAME=stats
+
+  - KAFKA_TOPIC=stats
+
+  - MINIO_HOST=http://${BENCHFLOW_ENV_MINIO_IP}
+  - MINIO_PORT=${BENCHFLOW_ENV_MINIO_PORT}
+  - MINIO_ACCESSKEYID=${BENCHFLOW_ENV_MINIO_ACCESS_KEY}
+  - MINIO_SECRETACCESSKEY=${BENCHFLOW_ENV_MINIO_SECRET_KEY}
+
+  - CONTAINERS=${BENCHFLOW_BENCHMARK_BOUNDSERVICE_CONTAINER_NAME}
+
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  expose:
+    - 8080
+  ports:
+    - '8080'
+
+endpoints:
+  start: /start
+  stop: /stop
