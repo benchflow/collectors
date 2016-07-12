@@ -28,4 +28,4 @@ endpoints:
 dependencies:
   monitors:
   - cpu
-  - mysql
+  - querymysql
