@@ -12,6 +12,10 @@ import (
 )
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		w.WriteHeader(405)
+		return	
+	}
 	// Generating key for Minio
 	//databaseMinioKey := minio.GenerateKey(os.Getenv("MYSQL_DB_NAME"))
 	databaseMinioKey := minio.GenerateKey(os.Getenv("MYSQL_DB_NAME"), os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))
