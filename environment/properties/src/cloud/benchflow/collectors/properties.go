@@ -21,6 +21,10 @@ func createDockerClient() docker.Client {
 	}
 
 func storeData(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		w.WriteHeader(405)
+		return	
+	}
 	client := createDockerClient()
 	
 	info, err := client.Info()

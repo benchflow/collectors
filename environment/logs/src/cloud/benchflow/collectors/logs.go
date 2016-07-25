@@ -16,6 +16,10 @@ import (
 var client docker.Client
 
 func storeData(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		w.WriteHeader(405)
+		return	
+	}
 	composedMinioKey := ""
 	composedContainerIds := ""
 	

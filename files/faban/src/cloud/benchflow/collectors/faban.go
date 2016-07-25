@@ -14,6 +14,10 @@ import (
 var fabanOutputRoot = "/app/faban/output/"
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		w.WriteHeader(405)
+		return	
+	}
     fabanRunId := r.FormValue("faban_run_id")
     path := fabanOutputRoot+fabanRunId
     files, err := ioutil.ReadDir(path)
