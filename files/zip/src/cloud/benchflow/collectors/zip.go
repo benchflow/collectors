@@ -11,6 +11,10 @@ import (
 )
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		w.WriteHeader(405)
+		return	
+	}
     ev := os.Getenv("TO_ZIP")
     paths := strings.Split(ev, ",")
     minioKey := minio.GenerateKey("folders", os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))

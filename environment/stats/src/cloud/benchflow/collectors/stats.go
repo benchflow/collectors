@@ -130,6 +130,10 @@ func createDockerClient() docker.Client {
 	}
 
 func startCollecting(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		return	
+	}
 	if collecting {
 		fmt.Fprintf(w, "Already collecting")
 		return
@@ -184,6 +188,10 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 }
 
 func stopCollecting(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		w.WriteHeader(405)
+		return	
+	}
 	if !collecting {
 		fmt.Fprintf(w, "Currently not collecting")
 		return
