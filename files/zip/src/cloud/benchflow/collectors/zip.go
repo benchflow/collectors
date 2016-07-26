@@ -33,7 +33,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		minio.SendGzipToMinio(folderName+".tar.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+folderName+".tar.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 	    //minio.StoreOnMinio(folderName+".tar.gz", "runs", minioKey)
 	}
-    kafka.SignalOnKafka(minioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "files", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+    kafka.SignalOnKafka(minioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "files", "files", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	fmt.Fprintf(w, "SUCCESS")
 }
 
