@@ -91,6 +91,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		//minio.StoreOnMinio(container.ID+"_tmp_err.gz", "runs", minioKey)
 		//kafka.SignalOnKafka(minioKey)
 	}
+	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
+	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
+	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
 	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 }
 
