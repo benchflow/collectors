@@ -201,6 +201,7 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	collecting = false
 	composedMinioKey := ""
 	composedContainerIds := ""
+	composedContainerNames := ""
 	for _, container := range containers {
 		minio.GzipFile("/app/"+container.Name+"_stats_tmp")
 		if container.Network == "host" {
@@ -211,6 +212,8 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(minioKey)
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+container.ID+","
+		cName := strings.Split(container.Name, "_")[0]
+		composedContainerNames = composedContainerNames+cName+","
 		//callMinioClient("/app/"+container.ID+"_stats_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_stats.gz")
 		minio.SendGzipToMinio("/app/"+container.Name+"_stats_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_stats.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		if container.Network == "host" {
@@ -236,8 +239,9 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
 	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
+	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
 	//signalOnKafka(composedMinioKey, composedContainerIds)
-	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	fmt.Fprintf(w, "Stopped collecting")
 }
 
