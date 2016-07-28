@@ -35,7 +35,7 @@ func SendGzipToMinio(fileName string, minioHost string, minioPort string, minioK
 	}
 
 func sendToMinio(fileName string, minioHost string, minioPort string, minioKey string, accessKey string, secretAccessKey string, fileType string) error {
-	minioClient, err := minio.New(minioHost+":"+minioPort, accessKey, secretAccessKey, false)
+	minioClient, err := minio.New(minioHost+":"+minioPort, accessKey, secretAccessKey, true)
 	if err != nil {
 		fmt.Println(err)
 	    return err
