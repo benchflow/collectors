@@ -21,6 +21,14 @@ build_container:
 	$(MAKE) -C ./environment/stats build_container
 	$(MAKE) -C ./environment/properties build_container
 
+get_commons_dependencies:
+	$(MAKE) -C ./files/zip get_commons_dependencies
+	$(MAKE) -C ./files/faban get_commons_dependencies
+	$(MAKE) -C ./dbms/mysql get_commons_dependencies
+	$(MAKE) -C ./environment/logs get_commons_dependencies
+	$(MAKE) -C ./environment/stats get_commons_dependencies
+	$(MAKE) -C ./environment/properties get_commons_dependencies
+
 test: build_release
 	$(MAKE) -C ./files/zip test
 	$(MAKE) -C ./files/faban test
