@@ -22,6 +22,7 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	}
 	composedMinioKey := ""
 	composedContainerIds := ""
+	composedContainerNames := ""
 	
 	info, err := client.Info()
 	if err != nil {
@@ -78,6 +79,8 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+inspect.ID+","
+		cName := strings.Split(container, "_")[0]
+		composedContainerNames = composedContainerNames+cName+","
 		
 		minio.SendGzipToMinio(inspect.Name+"_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+".gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		//callMinioClient(container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
@@ -88,7 +91,10 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		//minio.StoreOnMinio(container.ID+"_tmp_err.gz", "runs", minioKey)
 		//kafka.SignalOnKafka(minioKey)
 	}
-	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
+	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
+	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
+	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 }
 
 func createDockerClient() docker.Client {
