@@ -5,9 +5,11 @@ zip:
   - KAFKA_TOPIC=zip
   - TO_ZIP=${BENCHFLOW_BENCHMARK_CONFIG_TO_ZIP}
   expose:
-      - 8080
+  - 8080
   ports:
-      - '8080'
+  - '8080'
+  volumes_from:
+  - ${BENCHFLOW_BOUNDSERVICE_VOLUMES}
 
 endpoints:
    stop: /store
