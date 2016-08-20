@@ -14,6 +14,3 @@ dbms/mysql/benchflow_make
 
 environment/stats/benchflow_make
 
-files/faban/Godeps/_workspace/pkg
-files/faban/Godeps/_workspace/pkg
-

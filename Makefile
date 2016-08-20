@@ -7,7 +7,6 @@ all: build_release
 
 build_release:
 	$(MAKE) -C ./files/zip
-	$(MAKE) -C ./files/faban
 	$(MAKE) -C ./dbms/mysql
 	$(MAKE) -C ./environment/logs
 	$(MAKE) -C ./environment/stats
@@ -15,7 +14,6 @@ build_release:
 
 build_container:
 	$(MAKE) -C ./files/zip build_container
-	$(MAKE) -C ./files/faban build_container
 	$(MAKE) -C ./dbms/mysql build_container
 	$(MAKE) -C ./environment/logs build_container
 	$(MAKE) -C ./environment/stats build_container
@@ -23,7 +21,6 @@ build_container:
 
 get_commons_dependencies:
 	$(MAKE) -C ./files/zip get_commons_dependencies
-	$(MAKE) -C ./files/faban get_commons_dependencies
 	$(MAKE) -C ./dbms/mysql get_commons_dependencies
 	$(MAKE) -C ./environment/logs get_commons_dependencies
 	$(MAKE) -C ./environment/stats get_commons_dependencies
@@ -31,7 +28,6 @@ get_commons_dependencies:
 
 test: build_release
 	$(MAKE) -C ./files/zip test
-	$(MAKE) -C ./files/faban test
 	$(MAKE) -C ./dbms/mysql test
 	$(MAKE) -C ./environment/logs test
 	$(MAKE) -C ./environment/stats test
