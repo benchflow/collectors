@@ -19,8 +19,8 @@ type Container struct {
 	Name         string
 	ID           string
 	statsChannel chan *docker.Stats
-	doneChannel chan bool
-	Network       string
+	doneChannel  chan bool
+	Network      string
 }
 
 var containers []Container
@@ -78,20 +78,54 @@ func collectNetworkStats(container Container, client docker.Client) {
 		interfaces, err := net.Interfaces()
 		if err != nil {
 	        panic(err)
-	    	}
+	    }
 		var nethogsOptions []string
 		nethogsOptions = append(nethogsOptions, "-t")
+
 		var interfaceNames []string
-		for _, each := range interfaces {
-			interfaceNames = append(interfaceNames, each.Name)
-			}
+		//Compute interfaces that can and should be monitored
+		//This fixes: http://askubuntu.com/questions/261024/nethogs-ioctl-failed-while-establishing-local-ip
+		//TODO: investigate possible improvements
+	    for _, each := range interfaces {
+	    	  //Reference: http://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go
+	    	  //TODO: investigate possible not working with IPV6
+	          addrs, _ := each.Addrs()
+	          
+	          atLeastOneToMonitor := false
+
+	          for _, addr := range addrs {
+	             var ip net.IP
+	             switch v := addr.(type) {
+	             case *net.IPNet:
+	                     // fmt.Println("IPNet");
+	                     ip = v.IP
+	             case *net.IPAddr:
+	                     // fmt.Println("IPAddr");
+	                     ip = v.IP
+	             }
+	             // if the ip is a GlobalUnicast or the LoopBack one, we monitor it.
+	             // We want to monitor network utilization across IPs
+	             // As for example, Docker virtual subnet (https://docs.docker.com/v1.7/articles/networking/) it is not monitored
+	             if(ip.IsGlobalUnicast() || ip.IsLoopback()){
+	               atLeastOneToMonitor = true
+	               break
+	             }
+	         }
+
+	         if(atLeastOneToMonitor){
+	            interfaceNames = append(interfaceNames, each.Name)
+	         }
+
+	         // fmt.Println(interfaceNames);
+	    }
+
 		nethogsOptions = append(nethogsOptions, interfaceNames...)
-		cmd := exec.Command("/usr/usr/local/sbin/nethogs", nethogsOptions...)
+		cmd := exec.Command("/usr/sbin/nethogs", nethogsOptions...)
 		cmd.Stdout = foNet
 		err = cmd.Start()
 	    if err != nil {
 	        panic(err)
-	    	}
+	    }
 		for true {
 			select {
 			default:
@@ -109,7 +143,7 @@ func collectNetworkStats(container Container, client docker.Client) {
 				foTop.Close()
 				waitGroup.Done()
 				return
-				}
+			}
 		}
 	}()
 }
@@ -125,24 +159,29 @@ func createDockerClient() docker.Client {
     client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatal(err)
-		}
-	return *client
 	}
+
+	return *client
+}
 
 func startCollecting(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(405)
 		return	
 	}
+
 	if collecting {
 		fmt.Fprintf(w, "Already collecting")
 		return
 	}
+
 	client := createDockerClient()
 	hostInfo, err := client.Info()
+
 	if err != nil {
 		panic(err)
 	}
+
 	hostID = hostInfo.ID
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ",")
@@ -250,5 +289,5 @@ func main() {
 	
 	http.HandleFunc("/start", startCollecting)
 	http.HandleFunc("/stop", stopCollecting)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":" + os.Getenv("EXPOSED_PORT"), nil)
 }
