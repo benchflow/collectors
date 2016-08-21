@@ -1,5 +1,7 @@
 stats:
   image: benchflow/collectors:stats_dev
+  #Needed for chaperone, because we start the collector using pid="host"
+  command: --force
   environment:
   - BENCHFLOW_DATA_NAME=stats
 
@@ -14,10 +16,16 @@ stats:
 
   volumes:
     - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  #The next two settings are needed when the collector is monitoring a container
+  #using 
+  network_mode: host
+  pid: host
+  
   expose:
-    - 8080
+    - 8090
   ports:
-    - '8080'
+    - '8090:8090'
 
 endpoints:
   start: /start
