@@ -2,14 +2,14 @@ FROM benchflow/base-images:dev
 
 MAINTAINER Vincenzo FERME <info@vincenzoferme.it>
 
-RUN echo "@testing http://dl-4.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
-RUN echo "http://dl-4.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
-
 ENV COLLECTOR_NAME stats
 ENV COLLECTOR_VERSION v-dev
 ENV GLIBC_VERSION=2.23-r3
 ENV LANG=C.UTF-8
 ENV EXPOSED_PORT 8090
+
+RUN echo "@testing http://dl-4.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+RUN echo "http://dl-4.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
 
 RUN apk --update add wget curl gzip libgcc libpcap libstdc++ glib libxext libxrender ncurses-terminfo-base ncurses-terminfo ncurses-libs && \
     wget -q --no-check-certificate -O /app/$COLLECTOR_NAME https://github.com/benchflow/collectors/releases/download/$COLLECTOR_VERSION/$COLLECTOR_NAME && \
