@@ -2,16 +2,34 @@ package main
 
 import (
 	"bufio"
-	//"fmt"
+	"fmt"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/benchflow/commons/minio"
 	"github.com/benchflow/commons/kafka"
 	"log"
 	"net/http"
+	"encoding/json"
 	"os"
 	"strings"
 	"strconv"
 )
+
+type Response struct {
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
+}
 
 var client docker.Client
 
@@ -36,7 +54,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	if since != "" {
 		sinceInt, err = strconv.ParseInt(since, 10, 64)
 		if err != nil {
-			panic(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
+	    	return
 		}
 	}
 	
@@ -47,8 +67,10 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	for _, container := range conts {
 		inspect, err := client.InspectContainer(container)
 		if err != nil {
-			panic(err)
-			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
+	    	return
+		}
 		
 		fo, _ := os.Create(inspect.Name + "_tmp")
 		writerOut := bufio.NewWriter(fo)
@@ -65,7 +87,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 			Timestamps:   true,
 		})
 		if err != nil {
-			log.Fatal(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
+			return
 		}
 		
 		fo.Close()
@@ -74,7 +98,6 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		minio.GzipFile(inspect.Name+"_tmp")
 		minio.GzipFile(inspect.Name+"_tmp_err")
 		
-		//minioKey := minio.GenerateKey("logs.gz")
 		minioKey := minio.GenerateKey(inspect.Name, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))
 		
 		composedMinioKey = composedMinioKey+minioKey+","
@@ -83,18 +106,15 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		composedContainerNames = composedContainerNames+cName+","
 		
 		minio.SendGzipToMinio(inspect.Name+"_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+".gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
-		//callMinioClient(container.ID+"_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey)
-		//minio.StoreOnMinio(container.ID+"_tmp.gz", "runs", minioKey)
-		
-		//callMinioClient(container.ID+"_tmp_err.gz", os.Getenv("MINIO_ALIAS"), minioKey)
 		minio.SendGzipToMinio(inspect.Name+"_tmp_err.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_err.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
-		//minio.StoreOnMinio(container.ID+"_tmp_err.gz", "runs", minioKey)
-		//kafka.SignalOnKafka(minioKey)
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
 	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
 	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
 	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
+	
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func createDockerClient() docker.Client {
@@ -102,7 +122,7 @@ func createDockerClient() docker.Client {
     client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatal(err)
-		}
+	}
 	return *client
 }
 

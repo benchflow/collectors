@@ -8,7 +8,25 @@ import (
     "strings"
     "github.com/benchflow/commons/minio"
     "github.com/benchflow/commons/kafka"
+    "encoding/json"
 )
+
+type Response struct {
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
+}
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
@@ -27,14 +45,13 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		cmd.Wait()
 		if err != nil {
 			panic(err)
-			}  
-	    //minioKey := minio.GenerateKey(folderName+".tar.gz")
-		//callMinioClient(folderName+".tar.gz", os.Getenv("MINIO_ALIAS"), minioKey)
+		}  
 		minio.SendGzipToMinio(folderName+".tar.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+folderName+".tar.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
-	    //minio.StoreOnMinio(folderName+".tar.gz", "runs", minioKey)
 	}
     kafka.SignalOnKafka(minioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "files", "files", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
-	fmt.Fprintf(w, "SUCCESS")
+	
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func main() {

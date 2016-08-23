@@ -13,7 +13,25 @@ import (
 	"github.com/fsouza/go-dockerclient"
 	"github.com/benchflow/commons/minio"
 	"github.com/benchflow/commons/kafka"
+	"encoding/json"
 )
+
+type Response struct {
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
+}
 
 type Container struct {
 	Name         string
@@ -171,7 +189,8 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if collecting {
-		fmt.Fprintf(w, "Already collecting")
+		writeJSONResponse(w, "FAILED", "Collection already in progress")
+		fmt.Println("Collection already in progress")
 		return
 	}
 
@@ -223,7 +242,9 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	collecting = true
-	fmt.Fprintf(w, "Started collecting")
+	
+	writeJSONResponse(w, "SUCCESS", "The collection was started successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was started successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func stopCollecting(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +253,8 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		return	
 	}
 	if !collecting {
-		fmt.Fprintf(w, "Currently not collecting")
+		writeJSONResponse(w, "FAILED", "No collection in progress")
+		fmt.Println("No collection in progress")
 		return
 	}
 	close(stopChannel)
@@ -248,40 +270,43 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 			minio.GzipFile("/app/"+container.Name+"_top_tmp")
 		}
 		minioKey := minio.GenerateKey(container.Name, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))
-		fmt.Println(minioKey)
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+container.ID+","
 		cName := strings.Split(container.Name, "_")[0]
 		composedContainerNames = composedContainerNames+cName+","
-		//callMinioClient("/app/"+container.ID+"_stats_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_stats.gz")
 		minio.SendGzipToMinio("/app/"+container.Name+"_stats_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_stats.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		if container.Network == "host" {
-			//callMinioClient("/app/"+container.ID+"_network_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_network.gz")
 			minio.SendGzipToMinio("/app/"+container.Name+"_network_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_network.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
-			//callMinioClient("/app/"+container.ID+"_top_tmp.gz", os.Getenv("MINIO_ALIAS"), minioKey+"_top.gz")
 			minio.SendGzipToMinio("/app/"+container.Name+"_top_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_top.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		}
 		err := os.Remove("/app/"+container.Name+"_stats_tmp.gz")
 		if err != nil {
-	        panic(err)
+	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
+    		return
 	    }
 		if container.Network == "host" {
 			err = os.Remove("/app/"+container.Name+"_network_tmp.gz")
 			if err != nil {
-		        panic(err)
+		        http.Error(w, err.Error(), http.StatusInternalServerError)
+		        fmt.Println(err)
+	    		return
 		    }
 			err = os.Remove("/app/"+container.Name+"_top_tmp.gz")
 			if err != nil {
-		        panic(err)
+		        http.Error(w, err.Error(), http.StatusInternalServerError)
+		        fmt.Println(err)
+	    		return
 		    }
 		}
 	}
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
 	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
 	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
-	//signalOnKafka(composedMinioKey, composedContainerIds)
 	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
-	fmt.Fprintf(w, "Stopped collecting")
+	
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func main() {
