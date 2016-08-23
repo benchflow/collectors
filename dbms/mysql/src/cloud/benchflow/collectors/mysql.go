@@ -3,6 +3,7 @@ package main
 import (
     "net/http"
     "os"
+    "fmt"
     "os/exec"
     "github.com/benchflow/commons/minio"
     "github.com/benchflow/commons/kafka"
@@ -11,7 +12,20 @@ import (
 )
 
 type Response struct {
-  Successful bool
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +41,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	outfile, err := os.Create("/app/"+os.Getenv("MYSQL_DB_NAME")+"_backup.sql")
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        fmt.Println(err)
 	    return
     }
     cmd.Stdout = outfile
@@ -34,6 +49,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     err = cmd.Wait()
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        fmt.Println(err)
 	    return
     }
     outfile.Close()
@@ -44,6 +60,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	err = os.Remove("/app/"+os.Getenv("MYSQL_DB_NAME")+"_backup.sql.gz")
 	if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        fmt.Println(err)
 	    return
     }
 	
@@ -57,6 +74,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     outfile, err = os.Create("/app/database_table_sizes_backup.csv")
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        fmt.Println(err)
 	    return
     }
     cmd2.Stdin, _ = cmd.StdoutPipe()
@@ -66,6 +84,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     cmd2.Wait()
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        fmt.Println(err)
 	    return
     }
     outfile.Close()
@@ -74,6 +93,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	err = os.Remove("/app/database_table_sizes_backup.csv.gz")
 	if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
+        fmt.Println(err)
 	    return
     }
 	
@@ -85,6 +105,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    outfile, err := os.Create("/app/"+each+"_backup.csv")
 	    if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	    cmd2.Stdin, _ = cmd.StdoutPipe()
@@ -94,6 +115,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    cmd2.Wait()
 	    if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	    outfile.Close()
@@ -102,6 +124,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		err = os.Remove("/app/"+each+"_backup.csv.gz")
 		if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	}
@@ -113,6 +136,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    outfile, err := os.Create("/app/"+each+"_backup_schema.csv")
 	    if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	    cmd2.Stdin, _ = cmd.StdoutPipe()
@@ -122,6 +146,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    cmd2.Wait()
 	    if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	    outfile.Close()
@@ -130,20 +155,14 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		err = os.Remove("/app/"+each+"_backup_schema.csv.gz")
 		if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	}
     kafka.SignalOnKafka(databaseMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "mysql", "mysql", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	
-	response := Response{true}
-	js, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
-    }
-    
-    w.Header().Set("Content-Type", "application/json")
-    w.Write(js)
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
  
 func main() {

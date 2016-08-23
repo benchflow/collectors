@@ -12,7 +12,20 @@ import (
 )
 
 type Response struct {
-  Successful bool
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
 }
  
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,15 +50,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
     kafka.SignalOnKafka(minioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "files", "files", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	
-	response := Response{true}
-	js, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
-    }
-    
-    w.Header().Set("Content-Type", "application/json")
-    w.Write(js)
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func main() {

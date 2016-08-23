@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -12,7 +13,20 @@ import (
 )
 
 type Response struct {
-  Successful bool
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
 }
 
 func createDockerClient() docker.Client {
@@ -20,9 +34,9 @@ func createDockerClient() docker.Client {
     client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatal(err)
-		}
-	return *client
 	}
+	return *client
+}
 
 func storeData(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
@@ -34,12 +48,14 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	info, err := client.Info()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
     	return
 	}
 	
 	version, err := client.Version()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
     	return
 	}
 	
@@ -55,22 +71,26 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		foInspect, err := os.Create("/app/"+each+"_inspect_tmp")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
 	    	return
 		}
 		foInfo, err := os.Create("/app/"+each+"_info_tmp")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
 	    	return
 		}
 		foVersion, err := os.Create("/app/"+each+"_version_tmp")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
 	    	return
 		}
 		
 		inspect, err := client.InspectContainer(each)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
 	    	return
 		}
 		e.SetJSON("inspect", inspect)
@@ -101,16 +121,19 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		err = os.Remove("/app/"+each+"_inspect_tmp.gz")
 		if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 		err = os.Remove("/app/"+each+"_info_tmp.gz")
 		if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 		err = os.Remove("/app/"+each+"_version_tmp.gz")
 		if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
+	        fmt.Println(err)
 	    	return
 	    }
 	}
@@ -120,15 +143,8 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	
 	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	
-	response := Response{true}
-	js, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
-    }
-    
-    w.Header().Set("Content-Type", "application/json")
-    w.Write(js)
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func main() {

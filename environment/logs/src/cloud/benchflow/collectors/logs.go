@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	//"fmt"
+	"fmt"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/benchflow/commons/minio"
 	"github.com/benchflow/commons/kafka"
@@ -15,7 +15,20 @@ import (
 )
 
 type Response struct {
-  Successful bool
+  Status string
+  Message string
+}
+
+func writeJSONResponse(w http.ResponseWriter, status string, message string) {
+	response := Response{status, message}
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+	    return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)	
 }
 
 var client docker.Client
@@ -41,7 +54,9 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	if since != "" {
 		sinceInt, err = strconv.ParseInt(since, 10, 64)
 		if err != nil {
-			panic(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
+	    	return
 		}
 	}
 	
@@ -53,6 +68,7 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		inspect, err := client.InspectContainer(container)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
 	    	return
 		}
 		
@@ -72,6 +88,7 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println(err)
 			return
 		}
 		
@@ -96,15 +113,8 @@ func storeData(w http.ResponseWriter, r *http.Request) {
 	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
 	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	
-	response := Response{true}
-	js, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
-    }
-    
-    w.Header().Set("Content-Type", "application/json")
-    w.Write(js)
+	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
+	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
 func createDockerClient() docker.Client {
