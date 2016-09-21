@@ -11,11 +11,13 @@ import (
     "encoding/json"
 )
 
+//Structure of the response message for the API requests
 type Response struct {
   Status string
   Message string
 }
 
+//Function to marshall and write the response to the API requests
 func writeJSONResponse(w http.ResponseWriter, status string, message string) {
 	response := Response{status, message}
 	js, err := json.Marshal(response)
@@ -28,7 +30,9 @@ func writeJSONResponse(w http.ResponseWriter, status string, message string) {
     w.Write(js)	
 }
 
+//Primary function that is called when a request is received from a client on /store
 func backupHandler(w http.ResponseWriter, r *http.Request) {
+	//If request method is not PUT then respond with method not allowed
 	if r.Method != "PUT" {
 		w.WriteHeader(405)
 		return	
@@ -54,9 +58,11 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
     }
     outfile.Close()
    
+    //Gzip and send to Minio
     minio.GzipFile("/app/"+os.Getenv("MYSQL_DB_NAME")+"_backup.sql")
     minio.SendGzipToMinio("/app/"+os.Getenv("MYSQL_DB_NAME")+"_backup.sql.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), databaseMinioKey+"/"+os.Getenv("MYSQL_DB_NAME")+"_backup.sql", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
    
+   //Remove temp file
 	err = os.Remove("/app/"+os.Getenv("MYSQL_DB_NAME")+"_backup.sql.gz")
 	if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -68,7 +74,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	ev := os.Getenv("TABLE_NAMES")
     tables := strings.Split(ev, ",")
     
-    // Save Table sizes
+    // Save Table sizes, sending a mysql query and parsing it with sed into a csv file
     cmd = exec.Command("mysql", "-h", os.Getenv("MYSQL_HOST"), "-P", os.Getenv("MYSQL_PORT"), "-u", os.Getenv("MYSQL_USER"), "-p" + os.Getenv("MYSQL_USER_PASSWORD"), "-e", "USE "+os.Getenv("MYSQL_DB_NAME")+"; select table_schema AS Db, sum(data_length+index_length) AS Bytes from information_schema.tables where table_schema='"+os.Getenv("MYSQL_DB_NAME")+"' group by 1;")
     cmd2 := exec.Command("sed", "s/\\t/\",\"/g;s/^/\"/;s/$/\"/;s/\\n//g")
     outfile, err = os.Create("/app/database_table_sizes_backup.csv")
@@ -159,8 +165,10 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	    	return
 	    }
 	}
+    //Signal on Kafka
     kafka.SignalOnKafka(databaseMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), "mysql", "mysql", "host", os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	
+	//Write response
 	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
