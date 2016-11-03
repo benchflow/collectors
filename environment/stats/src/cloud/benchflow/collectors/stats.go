@@ -16,11 +16,13 @@ import (
 	"encoding/json"
 )
 
+//Structure of the response message for the API requests
 type Response struct {
   Status string
   Message string
 }
 
+//Function to marshall and write the response to the API requests
 func writeJSONResponse(w http.ResponseWriter, status string, message string) {
 	response := Response{status, message}
 	js, err := json.Marshal(response)
@@ -33,6 +35,7 @@ func writeJSONResponse(w http.ResponseWriter, status string, message string) {
     w.Write(js)	
 }
 
+//Structure representing a container and defining the channel for retrieving stats over time from the Docker client
 type Container struct {
 	Name         string
 	ID           string
@@ -41,12 +44,18 @@ type Container struct {
 	Network      string
 }
 
+//List of the containers to observe
 var containers []Container
+//Host ID
 var hostID string
+//Channel to receive signal to stop collecting
 var stopChannel chan bool
+//Waitgroup object to await termination of the collections from all containers
 var waitGroup sync.WaitGroup
+//Var defining whether a collection is being performed or not
 var collecting bool
 
+//Function to attach to a container to start collecting stats
 func attachToContainer(client docker.Client, container Container) {
 	go func() {
 		_ = client.Stats(docker.StatsOptions{
@@ -59,8 +68,10 @@ func attachToContainer(client docker.Client, container Container) {
 	}()
 }
 
+//Function to collect the stats, will continue to do so till stopChannel is signalled to stop
 func collectStats(container Container) {
 	go func() {
+		//Create temp file for the stats and variable to contain the JSON objects containing the stats at a given moment
 		var e docker.Env
 		fo, err := os.Create("/app/"+container.Name+"_stats_tmp")
 		if err != nil {
@@ -69,11 +80,13 @@ func collectStats(container Container) {
 		for true {
 			select {
 			case <- stopChannel:
+				//If signalled to stop, stop collecting
 				close(container.doneChannel)
 				fo.Close()
 				waitGroup.Done()
 				return
 			default:
+				//If not signalled to stop, collect stats data and write it to the temp file
 				dat := (<-container.statsChannel)
 				e.SetJSON("dat", dat)
 				fo.Write([]byte(e.Get("dat")))
@@ -83,8 +96,10 @@ func collectStats(container Container) {
 	}()
 }
 
+//Function to collect the network stats using nethogs if net==host on the container
 func collectNetworkStats(container Container, client docker.Client) {
 	go func() {
+		//Create temp files
 		foNet, err := os.Create("/app/"+container.Name+"_network_tmp")
 		if err != nil {
 	        panic(err)
@@ -93,10 +108,12 @@ func collectNetworkStats(container Container, client docker.Client) {
 		if err != nil {
 	        panic(err)
 	    }
+		//Get the list of network interfaces
 		interfaces, err := net.Interfaces()
 		if err != nil {
 	        panic(err)
 	    }
+		//Set nethogs options
 		var nethogsOptions []string
 		nethogsOptions = append(nethogsOptions, "-t")
 
@@ -136,7 +153,8 @@ func collectNetworkStats(container Container, client docker.Client) {
 
 	         // fmt.Println(interfaceNames);
 	    }
-
+		
+		//Run nethogs to collect data
 		nethogsOptions = append(nethogsOptions, interfaceNames...)
 		cmd := exec.Command("/usr/sbin/nethogs", nethogsOptions...)
 		cmd.Stdout = foNet
@@ -147,6 +165,7 @@ func collectNetworkStats(container Container, client docker.Client) {
 		for true {
 			select {
 			default:
+				//If not signalled to stop, write nethogs data to file every 750 milliseconds
 				top, err := client.TopContainer(container.Name, "")
 				if err != nil {
 		        	panic(err)
@@ -156,6 +175,7 @@ func collectNetworkStats(container Container, client docker.Client) {
 				foTop.WriteString(e.Get("top")+"\n")
 				time.Sleep(750 * time.Millisecond)
 			case <- stopChannel:
+				//If signalled to stop, kill nethogs and stop collecting
 				cmd.Process.Kill()
 				foNet.Close()
 				foTop.Close()
@@ -166,6 +186,7 @@ func collectNetworkStats(container Container, client docker.Client) {
 	}()
 }
 
+//Function to create the Docker client object to communicate with Docker, using the Docker socket (shared with the container)
 func createDockerClient() docker.Client {
 	//path := os.Getenv("DOCKER_CERT_PATH")
 	//endpoint := "tcp://192.168.99.100:2376"
@@ -182,30 +203,38 @@ func createDockerClient() docker.Client {
 	return *client
 }
 
+//Function to begin collecting when client requests on /start
 func startCollecting(w http.ResponseWriter, r *http.Request) {
+	//If request method is not POST then respond with method not allowed
 	if r.Method != "POST" {
 		w.WriteHeader(405)
 		return	
 	}
-
+	
+	//If already collecting respond with collection already in progress
 	if collecting {
 		writeJSONResponse(w, "FAILED", "Collection already in progress")
 		fmt.Println("Collection already in progress")
 		return
 	}
-
+	
+	//Create Docker client
 	client := createDockerClient()
+	
+	//Get host ID
 	hostInfo, err := client.Info()
-
 	if err != nil {
 		panic(err)
 	}
-
 	hostID = hostInfo.ID
+	
+	//Get list of containers to observe
 	contEV := os.Getenv("CONTAINERS")
 	conts := strings.Split(contEV, ",")
 	containers = []Container{}
+	//Create stop channel
 	stopChannel = make(chan bool)
+	//For every container to observe, start the collection
 	for _, each := range conts {
 		containerInspect, err := client.InspectContainer(each)
 		networks := containerInspect.NetworkSettings.Networks
@@ -219,16 +248,19 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
                                 'host': use the Docker host network stack
                                 '<network-name>|<network-id>': connect to a user-defined network
 		*/
+		//Check if net is host or not
 		network := "bridge"
 		for k := range networks {
 			if k == "host" {
 				network = "host"
 				}
 			}
+		//Container ID
 		ID := containerInspect.ID
 		if err != nil {
 			panic(err)
 			}
+		//Start collecting
 		statsChannel := make(chan *docker.Stats)
 		doneChannel := make(chan bool)
 		c := Container{Name: each, ID: ID, statsChannel: statsChannel, doneChannel: doneChannel, Network: network}
@@ -236,49 +268,64 @@ func startCollecting(w http.ResponseWriter, r *http.Request) {
 		attachToContainer(client, c)
 		collectStats(c)
 		waitGroup.Add(1)
+		//If net is host, collect network stats with nethogs
 		if(network == "host") {
 			collectNetworkStats(c, client)
 			waitGroup.Add(1)
 		}
 	}
+	//Set that we are collecting 
 	collecting = true
 	
+	//Respond to the client
 	writeJSONResponse(w, "SUCCESS", "The collection was started successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 	fmt.Println("The collection was started successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
 
+//Function to stop the collection when receiving a request on /stop
 func stopCollecting(w http.ResponseWriter, r *http.Request) {
+	//If request method is not PUT then respond with method not allowed
 	if r.Method != "PUT" {
 		w.WriteHeader(405)
 		return	
 	}
+	//If not collecting, then respond that collection is not in progress right now
 	if !collecting {
 		writeJSONResponse(w, "FAILED", "No collection in progress")
 		fmt.Println("No collection in progress")
 		return
 	}
+	//Signal to stop by closing the stop channel
 	close(stopChannel)
+	//Wait till all collections have stopped
 	waitGroup.Wait()
+	//Set that we are done collecting
 	collecting = false
+	
 	composedMinioKey := ""
 	composedContainerIds := ""
 	composedContainerNames := ""
+	//For all containers observed, save the stats
 	for _, container := range containers {
+		//Gzip files
 		minio.GzipFile("/app/"+container.Name+"_stats_tmp")
 		if container.Network == "host" {
 			minio.GzipFile("/app/"+container.Name+"_network_tmp")
 			minio.GzipFile("/app/"+container.Name+"_top_tmp")
 		}
+		//Generate Minio key
 		minioKey := minio.GenerateKey(container.Name, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), os.Getenv("BENCHFLOW_CONTAINER_NAME"), os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("BENCHFLOW_DATA_NAME"))
 		composedMinioKey = composedMinioKey+minioKey+","
 		composedContainerIds = composedContainerIds+container.ID+","
 		cName := strings.Split(container.Name, "_")[0]
 		composedContainerNames = composedContainerNames+cName+","
+		//Send files to Minio
 		minio.SendGzipToMinio("/app/"+container.Name+"_stats_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_stats.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		if container.Network == "host" {
 			minio.SendGzipToMinio("/app/"+container.Name+"_network_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_network.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 			minio.SendGzipToMinio("/app/"+container.Name+"_top_tmp.gz", os.Getenv("MINIO_HOST"), os.Getenv("MINIO_PORT"), minioKey+"_top.gz", os.Getenv("MINIO_ACCESSKEYID"), os.Getenv("MINIO_SECRETACCESSKEY"))
 		}
+		//Remove temp files
 		err := os.Remove("/app/"+container.Name+"_stats_tmp.gz")
 		if err != nil {
 	        http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -300,11 +347,13 @@ func stopCollecting(w http.ResponseWriter, r *http.Request) {
 		    }
 		}
 	}
+	//Signal to Kafka
 	composedMinioKey = strings.TrimRight(composedMinioKey, ",")
 	composedContainerIds = strings.TrimRight(composedContainerIds, ",")
 	composedContainerNames = strings.TrimRight(composedContainerNames, ",")
 	kafka.SignalOnKafka(composedMinioKey, os.Getenv("BENCHFLOW_TRIAL_ID"), os.Getenv("BENCHFLOW_EXPERIMENT_ID"), composedContainerIds, composedContainerNames, hostID, os.Getenv("BENCHFLOW_COLLECTOR_NAME"), os.Getenv("KAFKA_HOST"), os.Getenv("KAFKA_PORT"), os.Getenv("KAFKA_TOPIC"))
 	
+	//Respond to the client
 	writeJSONResponse(w, "SUCCESS", "The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 	fmt.Println("The collection was performed successfully for "+os.Getenv("BENCHFLOW_TRIAL_ID"))
 }
